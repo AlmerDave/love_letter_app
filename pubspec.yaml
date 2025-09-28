@@ -1,0 +1,52 @@
+name: love_letter_app
+description: A romantic date invitation mobile application
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Local Storage
+  shared_preferences: ^2.2.2
+  
+  # QR Code functionality
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.1.2  # ✅ Modern QR scanner
+  
+  # Date formatting
+  intl: ^0.18.1
+  
+  # UUID generation
+  uuid: ^4.1.0
+
+  # Audio playback for sound effects
+  audioplayers: ^6.0.0
+
+  # Google Fonts - NEW ADDITION
+  google_fonts: ^6.1.0  # ✅ NEW: Beautiful typography
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # Assets
+  assets:
+    - assets/images/
+    - assets/images/bubu_dudu/
+    - assets/sounds/
+  
+  # Fonts (Optional - will use system fonts for MVP)
+  # fonts:
+  #   - family: Merriweather
+  #     fonts:
+  #       - asset: assets/fonts/Merriweather-Regular.ttf
+  #       - asset: assets/fonts/Merriweather-Bold.ttf
+  #         weight: 700
