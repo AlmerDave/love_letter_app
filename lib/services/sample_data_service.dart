@@ -13,34 +13,49 @@ class SampleDataService {
     
     // Only add sample data if no invitations exist
     if (existingInvitations.isEmpty) {
-      await _createSingleLetter();
+      await _createMonthsaryLetters();
       // await _createSampleInvitations();
     }
   }
 
-/// Create a single invitation that can be opened immediately
-static Future<void> _createSingleLetter() async {
-  final invitation = Invitation(
-    id: _uuid.v4(),
-    title: "17th Monsthary BB Date 💗🥰",
-    message: 
-        "Para sa bb laaaabs of my lifeeee kooo,\n\n"
-        "Feel ko nagulat ka na nabasa mo ito hahahah "
-        "ito din yung pinag kakaabalahan simuka nung weekend, "
-        "pero dahil paparating na yung October 6 bb or yung first bb date "
-        "natenn ulit bb gusto siya gawing special kayaaa may pag aya bb gamit app "
-        "HAHAHA testing palang din ito bb pero baka madalas ko itong gamitinnnn hahahaha\n\n"
-        "Nasa baba din bb yung details at time 🥹🥹\n\n"
-        "Kikita na din tayo bb sobra sobraaangg happyyy 💕",
-    location: "Philippine Orthopedic Center",
-    dateTime: DateTime(2025, 10, 6, 8, 0), // October 6, 2025 8:00 AM
-    unlockDateTime: DateTime(2025, 9, 27, 12, 0), // September 27, 2025 12:00 PM (can be opened immediately)
-    status: InvitationStatus.pending,
-    createdAt: DateTime(2025, 9, 27, 10, 30), // Created September 27, 2025 10:30 AM
-  );
+/// Create invitations for 17th and 18th Monthsary BB Dates
+static Future<void> _createMonthsaryLetters() async {
+  final invitations = [
+    Invitation(
+      id: _uuid.v4(),
+      title: "17th Monsthary BB Date 💗🥰",
+      message: 
+          "Para sa bb laaaabs of my lifeeee kooo,\n\n"
+          "Feel ko nagulat ka na nabasa mo ito hahahah "
+          "ito din yung pinag kakaabalahan simuka nung weekend, "
+          "pero dahil paparating na yung October 6 bb or yung first bb date "
+          "natenn ulit bb gusto siya gawing special kayaaa may pag aya bb gamit app "
+          "HAHAHA testing palang din ito bb pero baka madalas ko itong gamitinnnn hahahaha\n\n"
+          "Nasa baba din bb yung details at time 🥹🥹\n\n"
+          "Kikita na din tayo bb sobra sobraaangg happyyy 💕",
+      location: "Philippine Orthopedic Center",
+      dateTime: DateTime(2025, 10, 6, 8, 0), // October 6, 2025 8:00 AM
+      unlockDateTime: DateTime(2025, 9, 27, 12, 0), // Available immediately
+      status: InvitationStatus.pending,
+      createdAt: DateTime(2025, 9, 27, 10, 30),
+    ),
+    Invitation(
+      id: _uuid.v4(),
+      title: "18th Monsthary BB Date 💗🥰",
+      message: "",
+      location: "hindi ko pa sure hahaha",
+      dateTime: DateTime(2025, 10, 27, 8, 0), // October 27, 2025 8:00 AM
+      unlockDateTime: DateTime(2025, 10, 6, 0, 0), // Unlocks October 6, 2025
+      status: InvitationStatus.locked,
+      createdAt: DateTime(2025, 9, 27, 10, 30),
+    ),
+  ];
 
-  await StorageService.instance.saveInvitation(invitation);
+  for (final invitation in invitations) {
+    await StorageService.instance.saveInvitation(invitation);
+  }
 }
+
 
 
   /// Create beautiful sample love letters
