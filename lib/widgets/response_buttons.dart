@@ -25,7 +25,7 @@ class ResponseButtons extends StatelessWidget {
             style: AppTheme.acceptButtonStyle,
             icon: const Icon(Icons.favorite, size: 24),
             label: const Text(
-              'Yes, I\'d love to! 💕',
+              'Yes, I\'d love to! 💕🥰',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -45,7 +45,7 @@ class ResponseButtons extends StatelessWidget {
             style: AppTheme.rejectButtonStyle,
             icon: const Icon(Icons.close, size: 24),
             label: const Text(
-              'Maybe another time...',
+              'Maybe another time🥺🥺',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,

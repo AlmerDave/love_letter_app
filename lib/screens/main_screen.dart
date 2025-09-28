@@ -307,12 +307,12 @@ Widget build(BuildContext context) {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: AppTheme.softGold.withOpacity(0.6),
+                color: Colors.transparent,
                 width: 2,
               ),
-              boxShadow: [
+              boxShadow: const [
                 BoxShadow(
-                  color: AppTheme.softGold.withOpacity(0.2),
+                  color: Colors.transparent,
                   blurRadius: 8,
                   spreadRadius: 1,
                 ),
@@ -437,7 +437,7 @@ Widget build(BuildContext context) {
     required Color color,
   }) {
     return ElevatedButton.icon(
-      onPressed: onPressed,
+      onPressed: null,
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
         foregroundColor: Colors.white,

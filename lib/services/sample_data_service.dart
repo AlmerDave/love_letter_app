@@ -13,9 +13,35 @@ class SampleDataService {
     
     // Only add sample data if no invitations exist
     if (existingInvitations.isEmpty) {
-      await _createSampleInvitations();
+      await _createSingleLetter();
+      // await _createSampleInvitations();
     }
   }
+
+/// Create a single invitation that can be opened immediately
+static Future<void> _createSingleLetter() async {
+  final invitation = Invitation(
+    id: _uuid.v4(),
+    title: "17th Monsthary BB Date 💗🥰",
+    message: 
+        "Para sa bb laaaabs of my lifeeee kooo,\n\n"
+        "Feel ko nagulat ka na nabasa mo ito hahahah "
+        "ito din yung pinag kakaabalahan simuka nung weekend, "
+        "pero dahil paparating na yung October 6 bb or yung first bb date "
+        "natenn ulit bb gusto siya gawing special kayaaa may pag aya bb gamit app "
+        "HAHAHA testing palang din ito bb pero baka madalas ko itong gamitinnnn hahahaha\n\n"
+        "Nasa baba din bb yung details at time 🥹🥹\n\n"
+        "Kikita na din tayo bb sobra sobraaangg happyyy 💕",
+    location: "Philippine Orthopedic Center",
+    dateTime: DateTime(2025, 10, 6, 8, 0), // October 6, 2025 8:00 AM
+    unlockDateTime: DateTime(2025, 9, 27, 12, 0), // September 27, 2025 12:00 PM (can be opened immediately)
+    status: InvitationStatus.pending,
+    createdAt: DateTime(2025, 9, 27, 10, 30), // Created September 27, 2025 10:30 AM
+  );
+
+  await StorageService.instance.saveInvitation(invitation);
+}
+
 
   /// Create beautiful sample love letters
   static Future<void> _createSampleInvitations() async {
@@ -90,7 +116,7 @@ class SampleDataService {
         location: "Seaside Village - 2 hours north",
         dateTime: now.add(Duration(hours: 4)),
         unlockDateTime: now.subtract(Duration(hours: 1)),
-        status: InvitationStatus.rejected,
+        status: InvitationStatus.pending,
         createdAt: now.subtract(Duration(hours: 3)),
       ),
     ];

@@ -153,31 +153,45 @@ class LetterEnvelope extends StatelessWidget {
   }
 
   Widget _buildDateTimeInfo() {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(
-          Icons.schedule,
-          size: 16,
-          color: AppTheme.lightText,
+        // Date and Time row
+        Row(
+          children: [
+            Icon(
+              Icons.schedule,
+              size: 16,
+              color: AppTheme.lightText,
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                _formatDateTime(invitation.dateTime),
+                style: AppTheme.locationStyle.copyWith(fontSize: 14),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 4),
-        Text(
-          _formatDateTime(invitation.dateTime),
-          style: AppTheme.locationStyle.copyWith(fontSize: 14),
-        ),
-        const SizedBox(width: 16),
-        Icon(
-          Icons.location_on,
-          size: 16,
-          color: AppTheme.lightText,
-        ),
-        const SizedBox(width: 4),
-        Expanded(
-          child: Text(
-            invitation.location,
-            style: AppTheme.locationStyle.copyWith(fontSize: 14),
-            overflow: TextOverflow.ellipsis,
-          ),
+        const SizedBox(height: 6),
+        // Location row
+        Row(
+          children: [
+            Icon(
+              Icons.location_on,
+              size: 16,
+              color: AppTheme.lightText,
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                invitation.location,
+                style: AppTheme.locationStyle.copyWith(fontSize: 14),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -224,7 +238,22 @@ class LetterEnvelope extends StatelessWidget {
     );
   }
 
+  // Updated to match invitation_card.dart formatting
   String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+    final months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    final month = months[dateTime.month - 1];
+    final day = dateTime.day;
+    final year = dateTime.year;
+    final hour = dateTime.hour;
+    final minute = dateTime.minute;
+    
+    String period = hour >= 12 ? 'PM' : 'AM';
+    int displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    
+    return '$month $day, $year at $displayHour:${minute.toString().padLeft(2, '0')} $period';
   }
 }

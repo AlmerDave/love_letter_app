@@ -51,10 +51,10 @@ class _InvitationDetailScreenState extends State<InvitationDetailScreen> {
           _currentInvitation = _currentInvitation.copyWith(
             status: InvitationStatus.accepted,
           );
-          SoundService.instance.playSound(SoundType.accepted);
           _showHeartCelebration = true; // 🎉 Trigger beautiful heart animation!
         });
         
+        SoundService.instance.playSound(SoundType.accepted);
         _showSuccessMessage('Invitation accepted! 💕');
         
         // Wait for heart animation to complete before going back
@@ -90,9 +90,9 @@ class _InvitationDetailScreenState extends State<InvitationDetailScreen> {
           _currentInvitation = _currentInvitation.copyWith(
             status: InvitationStatus.rejected,
           );
-          SoundService.instance.playSound(SoundType.letterRejected);
         });
         
+        SoundService.instance.playSound(SoundType.letterRejected);
         _showErrorMessage('Maybe reconsider? 🥺');
         
         // Wait a moment then go back
@@ -166,59 +166,74 @@ class _InvitationDetailScreenState extends State<InvitationDetailScreen> {
           ),
         ),
         body: SafeArea(
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  // ✨ MAGICAL ENVELOPE ANIMATION (New in Phase 2!)
-                  if (_showEnvelopeAnimation)
-                    EnvelopeAnimation(
-                      invitation: _currentInvitation,
-                      onAnimationComplete: () {
-                        setState(() {
-                          _showEnvelopeAnimation = false;
-                          _showContent = true; // ✅ Show content AFTER animation
-                        });
-                      },
-                    )
-                  else
-                    _buildSimpleHeader(),
-                  
-                  // ✅ ONLY show content after envelope animation completes
-                  if (_showContent) ...[
-                    const SizedBox(height: 24),
-                    
-                    // Beautiful invitation content card
-                    InvitationCard(invitation: _currentInvitation),
-                    
-                    const SizedBox(height: 32),
-                    
-                    // Response buttons (if user can respond)
-                    if (_canRespond && !_isUpdating)
-                      ResponseButtons(
-                        onAccept: _handleAccept,
-                        onReject: _handleReject,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: IntrinsicHeight(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          // ✨ MAGICAL ENVELOPE ANIMATION (New in Phase 2!)
+                          if (_showEnvelopeAnimation)
+                            SizedBox(
+                              height: 300, // ✅ Fixed height to prevent overflow
+                              child: EnvelopeAnimation(
+                                invitation: _currentInvitation,
+                                onAnimationComplete: () {
+                                  setState(() {
+                                    _showEnvelopeAnimation = false;
+                                    _showContent = true; // ✅ Show content AFTER animation
+                                  });
+                                },
+                              ),
+                            )
+                          else
+                            _buildSimpleHeader(),
+                          
+                          // ✅ ONLY show content after envelope animation completes
+                          if (_showContent) ...[
+                            const SizedBox(height: 24),
+                            
+                            // Beautiful invitation content card
+                            InvitationCard(invitation: _currentInvitation),
+                            
+                            const SizedBox(height: 32),
+                            
+                            // Response buttons (if user can respond)
+                            if (_canRespond && !_isUpdating)
+                              ResponseButtons(
+                                onAccept: _handleAccept,
+                                onReject: _handleReject,
+                              ),
+                            
+                            // Loading indicator
+                            if (_isUpdating)
+                              const Padding(
+                                padding: EdgeInsets.all(32.0),
+                                child: CircularProgressIndicator(),
+                              ),
+                            
+                            // Status message for completed invitations
+                            if (!_canRespond)
+                              _buildStatusMessage(),
+                          ],
+                          
+                          // Flexible spacer to push content up and prevent overflow
+                          const Spacer(),
+                          const SizedBox(height: 20), // Minimum bottom padding
+                        ],
                       ),
-                    
-                    // Loading indicator
-                    if (_isUpdating)
-                      const Padding(
-                        padding: EdgeInsets.all(32.0),
-                        child: CircularProgressIndicator(),
-                      ),
-                    
-                    // Status message for completed invitations
-                    if (!_canRespond)
-                      _buildStatusMessage(),
-                  ],
-                  
-                  // Extra bottom padding to prevent overflow
-                  const SizedBox(height: 100),
-                ],
-              ),
-            ),
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -238,7 +253,12 @@ class _InvitationDetailScreenState extends State<InvitationDetailScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          AnimatedBubuDudu(theme: _getStatusTheme(), size: 80),
+          AnimatedBubuDudu(
+            theme: _getStatusTheme(), 
+            size: 80,
+            animate: true,
+            useRandomSelection: true,
+          ),
           const SizedBox(height: 12),
           Text(
             _getStatusText(),
@@ -260,7 +280,7 @@ class _InvitationDetailScreenState extends State<InvitationDetailScreen> {
 
     switch (_currentInvitation.status) {
       case InvitationStatus.accepted:
-        message = 'You accepted this invitation 😎👌🔥! Looking forward to our date 💕😘';
+        message = 'You accepted this invitation 😎👌🔥! Malapit na yung date naten 💕😘';
         color = Colors.green.shade600;
         break;
       case InvitationStatus.completed:
