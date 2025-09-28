@@ -136,3 +136,4 @@ lib/generated_plugin_registrant.dart
 # Temporary files
 *.tmp
 *.temp
+*.bat
