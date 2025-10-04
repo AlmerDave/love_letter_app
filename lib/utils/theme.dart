@@ -6,6 +6,7 @@ class AppTheme {
   // Color Palette
   static const Color primaryLavender = Color(0xFFE6E6FA);
   static const Color blushPink = Color(0xFFFFB6C1);
+  static const Color softBlush = Color(0xFFFFC0CB); // ✅ NEW: Soft blush pink
   static const Color warmCream = Color(0xFFFFF8DC);
   static const Color softGold = Color(0xFFFFD700);
   static const Color deepPurple = Color(0xFF6A5ACD);

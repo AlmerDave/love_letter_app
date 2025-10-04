@@ -8,10 +8,15 @@ import 'package:love_letter_app/services/sound_service.dart';
 import 'package:love_letter_app/widgets/letter_envelope.dart';
 import 'package:love_letter_app/screens/invitation_detail_screen.dart';
 import 'package:love_letter_app/screens/qr_scanner_screen.dart';
+import 'package:love_letter_app/screens/location_map_screen.dart';
 import 'package:love_letter_app/animations/shimmer_loading.dart';
 import 'package:love_letter_app/animations/floating_hearts_background.dart';
 import 'package:love_letter_app/utils/bubu_dudu_assets.dart';
 import 'package:love_letter_app/utils/theme.dart';
+import 'package:love_letter_app/services/firebase_service.dart';
+import 'package:love_letter_app/services/location_service.dart';
+import 'package:love_letter_app/services/user_service.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 
 class EnhancedMainScreen extends StatefulWidget {
@@ -77,7 +82,6 @@ class _EnhancedMainScreenState extends State<EnhancedMainScreen>
     setState(() => _isLoading = true);
     
     try {
-      // Add a small delay to show the beautiful shimmer effect
       await Future.delayed(const Duration(milliseconds: 500));
       
       final invitations = await StorageService.instance.getAllInvitations();
@@ -86,7 +90,6 @@ class _EnhancedMainScreenState extends State<EnhancedMainScreen>
         _isLoading = false;
       });
 
-      // Start animations after loading
       _fadeController.forward();
       await Future.delayed(const Duration(milliseconds: 200));
       _slideController.forward();
@@ -145,6 +148,134 @@ class _EnhancedMainScreenState extends State<EnhancedMainScreen>
     }
   }
 
+  Future<void> _navigateToLocationMap() async {
+    try {
+      bool hasNickname = await UserService.hasNickname();
+      
+      if (!hasNickname) {
+        final nickname = await _showNicknameDialog();
+        if (nickname == null || nickname.isEmpty) {
+          return;
+        }
+        
+        await UserService.saveNickname(nickname);
+      }
+
+      final position = await LocationService.getCurrentLocation();
+      if (position == null) {
+        _showErrorMessage('Location permission denied 📍');
+        return;
+      }
+
+      final userId = await UserService.getUserId();
+      final nickname = await UserService.getNickname();
+      
+      await FirebaseService.instance.locationsRef.child(userId).set({
+        'userId': userId,
+        'nickname': nickname,
+        'lat': position.latitude,
+        'lng': position.longitude,
+        'isSharing': true,
+        'lastUpdated': ServerValue.timestamp,
+      });
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const LocationMapScreen(),
+        ),
+      );
+
+    } catch (e) {
+      _showErrorMessage('Failed to share location: $e');
+    }
+  }
+
+  Future<String?> _showNicknameDialog() async {
+    String? nickname;
+    
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        backgroundColor: AppTheme.warmCream,
+        title: Column(
+          children: [
+            Icon(
+              Icons.favorite,
+              color: AppTheme.deepPurple,
+              size: 48,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'What\'s your name? 💕',
+              style: AppTheme.romanticTitle.copyWith(
+                fontSize: 20,
+                color: AppTheme.deepPurple,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        content: TextField(
+          autofocus: true,
+          textAlign: TextAlign.center,
+          style: AppTheme.invitationMessage.copyWith(fontSize: 16),
+          decoration: InputDecoration(
+            hintText: 'Enter your nickname',
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppTheme.primaryLavender),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppTheme.deepPurple, width: 2),
+            ),
+          ),
+          onChanged: (value) => nickname = value,
+          onSubmitted: (value) {
+            if (value.isNotEmpty) {
+              Navigator.pop(context, value);
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (nickname != null && nickname!.isNotEmpty) {
+                Navigator.pop(context, nickname);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.deepPurple,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            child: const Text(
+              'Continue',
+              style: TextStyle(color: Colors.white)
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openInvitation(Invitation invitation) async {
     if (!invitation.isAvailable && !invitation.status.canBeOpened) {
       _showErrorMessage('This invitation cannot be opened yet');
@@ -192,22 +323,22 @@ class _EnhancedMainScreenState extends State<EnhancedMainScreen>
       ..sort((a, b) => b.dateTime.compareTo(a.dateTime));
   }
 
-@override
-Widget build(BuildContext context) {
-  return FloatingHeartsBackground(
-    enabled: true,        // ✅ Use 'enabled' instead of 'showHearts'
-    heartCount: 12,
-    duration: const Duration(seconds: 8), // ✅ Faster animation
-    child: Scaffold(
-      backgroundColor: Colors.white,
-      appBar: _buildAnimatedAppBar(),
-      body: _isLoading 
-        ? const LoadingLettersScreen()
-        : _buildContent(),
-      floatingActionButton: _buildAnimatedFAB(),
-    ),
-  );
-}
+  @override
+  Widget build(BuildContext context) {
+    return FloatingHeartsBackground(
+      enabled: true,
+      heartCount: 12,
+      duration: const Duration(seconds: 8),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: _buildAnimatedAppBar(),
+        body: _isLoading 
+          ? const LoadingLettersScreen()
+          : _buildContent(),
+        floatingActionButton: _buildAnimatedFAB(),
+      ),
+    );
+  }
 
   PreferredSizeWidget _buildAnimatedAppBar() {
     return AppBar(
@@ -281,7 +412,7 @@ Widget build(BuildContext context) {
                   return _buildAnimatedLetterCard(invitation, index + _availableInvitations.length + _lockedInvitations.length);
                 }).toList(),
               ],
-              const SizedBox(height: 100), // Space for FAB
+              const SizedBox(height: 100),
             ],
           ),
         ),
@@ -437,7 +568,7 @@ Widget build(BuildContext context) {
     required Color color,
   }) {
     return ElevatedButton.icon(
-      onPressed: null,
+      onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
         foregroundColor: Colors.white,
@@ -461,18 +592,50 @@ Widget build(BuildContext context) {
   Widget _buildAnimatedFAB() {
     return ScaleTransition(
       scale: _fadeAnimation,
-      child: FloatingActionButton.extended(
-        onPressed: _navigateToQRScanner,
-        backgroundColor: AppTheme.primaryLavender, // Light violet color
-        elevation: 6,
-        icon: Icon(Icons.qr_code_scanner, color: AppTheme.deepPurple, size: 24),
-        label: Text(
-          'Scan Letter',
-          style: AppTheme.invitationMessage.copyWith(
-            color: AppTheme.deepPurple, // Darker text for contrast
-            fontWeight: FontWeight.w600,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'location',
+            onPressed: _navigateToLocationMap,
+            backgroundColor: Colors.pink.shade50,
+            elevation: 6,
+            icon: Icon(
+              Icons.favorite,
+              color: Colors.pink.shade400,
+              size: 24,
+            ),
+            label: Text(
+              'Where Are You?',
+              style: AppTheme.invitationMessage.copyWith(
+                color: Colors.pink.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
-        ),
+          
+          const SizedBox(height: 12),
+          
+          FloatingActionButton.extended(
+            heroTag: 'scanner',
+            onPressed: _navigateToQRScanner,
+            backgroundColor: AppTheme.primaryLavender,
+            elevation: 6,
+            icon: Icon(
+              Icons.qr_code_scanner,
+              color: AppTheme.deepPurple,
+              size: 24,
+            ),
+            label: Text(
+              'Scan Letter',
+              style: AppTheme.invitationMessage.copyWith(
+                color: AppTheme.deepPurple,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

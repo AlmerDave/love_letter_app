@@ -109,7 +109,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(kIsWeb ? 'QR Scanner (Limited on Web)' : 'Scan Love Letter'),
+        title: const Text('Scan Love Letter'),
         backgroundColor: Colors.black.withOpacity(0.5),
         elevation: 0,
         leading: IconButton(
@@ -124,93 +124,14 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
             ),
         ],
       ),
-      body: kIsWeb ? _buildWebLimitedView() : _buildMobileScanner(),
+      body: _buildScanner(),
     );
   }
 
-  Widget _buildWebLimitedView() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                gradient: AppTheme.primaryGradient,
-                borderRadius: BorderRadius.circular(60),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.blushPink.withOpacity(0.4),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.qr_code_scanner,
-                size: 60,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 32),
-            Text(
-              'QR Scanner on Web',
-              style: AppTheme.romanticTitle.copyWith(
-                color: Colors.white,
-                fontSize: 24,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppTheme.softGold.withOpacity(0.3),
-                ),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    'Limited Web Support',
-                    style: AppTheme.dateTimeStyle.copyWith(
-                      color: AppTheme.softGold,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'QR code scanning works best on mobile devices.\nFor the full experience, use your phone! 📱💕',
-                    style: AppTheme.invitationMessage.copyWith(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton.icon(
-              onPressed: () => Navigator.pop(context, false),
-              style: AppTheme.secondaryButtonStyle,
-              icon: const Icon(Icons.arrow_back),
-              label: const Text('Back to Letters'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMobileScanner() {
+  Widget _buildScanner() {
     return Stack(
       children: [
-        // Mobile Scanner
+        // Mobile Scanner - Works on both web and mobile!
         MobileScanner(
           controller: controller,
           onDetect: _onBarcodeDetected,
@@ -287,7 +208,9 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Make sure the QR code is clearly visible within the frame',
+                  kIsWeb 
+                    ? 'Allow camera access when prompted by your browser 📷'
+                    : 'Make sure the QR code is clearly visible within the frame',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.8),
                     fontSize: 14,
@@ -316,7 +239,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
             ),
             const SizedBox(height: 24),
             const Text(
-              'Camera Error',
+              'Camera Access Required',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 24,
@@ -333,11 +256,49 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
               ),
               textAlign: TextAlign.center,
             ),
+            if (kIsWeb) ...[
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppTheme.softGold.withOpacity(0.3),
+                  ),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '📱 Web Camera Tips:',
+                      style: TextStyle(
+                        color: AppTheme.softGold,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      '• Allow camera access in your browser\n'
+                      '• Use HTTPS or localhost\n'
+                      '• Works best on Chrome, Firefox, Safari\n'
+                      '• Check browser camera permissions',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 32),
-            ElevatedButton(
+            ElevatedButton.icon(
               onPressed: () => Navigator.pop(context, false),
               style: AppTheme.secondaryButtonStyle,
-              child: const Text('Back'),
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Back to Letters'),
             ),
           ],
         ),
