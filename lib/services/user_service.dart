@@ -32,11 +32,12 @@ class UserService {
     return nickname;
   }
 
-  /// Save nickname to local storage
+  /// Save nickname to local storage (always lowercase)
   static Future<void> saveNickname(String nickname) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_nicknameKey, nickname);
-    print('💾 Saved nickname: $nickname');
+    final lowercaseNickname = nickname.trim().toLowerCase();
+    await prefs.setString(_nicknameKey, lowercaseNickname);
+    print('💾 Saved nickname: $lowercaseNickname');
   }
 
   /// Check if user has set nickname

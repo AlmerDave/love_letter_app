@@ -35,4 +35,6 @@ class FirebaseService {
   }
 
   DatabaseReference get locationsRef => _database!.child('locations');
+
+  DatabaseReference get database => _database!;
 }

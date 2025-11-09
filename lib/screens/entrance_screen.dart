@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:love_letter_app/utils/theme.dart';
-import 'package:love_letter_app/screens/main_screen.dart';
+import 'package:love_letter_app/screens/main_navigation.dart';
 import 'dart:math' as math;
 
 class EntranceScreen extends StatefulWidget {
@@ -134,7 +134,7 @@ class _EntranceScreenState extends State<EntranceScreen>
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (context, animation, secondaryAnimation) =>
-            const EnhancedMainScreen(),
+            const MainNavigation(), // ✨ Changed from MainScreen to MainNavigation
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(
             opacity: animation,

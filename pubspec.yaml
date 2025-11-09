@@ -41,6 +41,8 @@ dependencies:
   flutter_map: ^6.1.0
   latlong2: ^0.9.0
 
+  sensors_plus: ^4.0.2  # ✅ Accelerometer for LEFT movement detection
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -54,6 +56,7 @@ flutter:
   assets:
     - assets/images/
     - assets/images/bubu_dudu/
+    - assets/images/bubu_dudu_gifs/
     - assets/sounds/
 
 # Add this section at the end of your pubspec.yaml

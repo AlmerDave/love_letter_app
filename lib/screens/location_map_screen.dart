@@ -22,19 +22,12 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
   String? _currentUserId;
   bool _isSharing = true;
   StreamSubscription? _locationsSubscription;
-  Timer? _locationUpdateTimer;
   double? _distanceInMeters;
 
   @override
   void initState() {
     super.initState();
     _initializeMap();
-    
-    // Optional: Auto-update location every 2 minutes
-    _locationUpdateTimer = Timer.periodic(
-      const Duration(minutes: 2),
-      (_) => _refreshMyLocation(),
-    );
   }
 
   Future<void> _initializeMap() async {
@@ -130,21 +123,30 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
       }
     });
 
-    // Draw line between markers if there are exactly 2 people
+    // Draw kiss emojis between markers if there are exactly 2 people
     if (positions.length == 2) {
       _distanceInMeters = _calculateDistance(positions[0], positions[1]);
       
-      newPolylines.add(
-        Polyline(
-          points: positions,
-          strokeWidth: 3,
-          color: AppTheme.deepPurple.withOpacity(0.6),
-          borderStrokeWidth: 1,
-          borderColor: Colors.white,
-          // Dashed line effect
-          isDotted: false,
-        ),
-      );
+      // Many kiss emojis densely packed - always 20-30 kisses regardless of distance
+      final numberOfKisses = 30;
+      
+      for (int i = 1; i < numberOfKisses; i++) {
+        final ratio = i / numberOfKisses;
+        final lat = positions[0].latitude + (positions[1].latitude - positions[0].latitude) * ratio;
+        final lng = positions[0].longitude + (positions[1].longitude - positions[0].longitude) * ratio;
+        
+        newMarkers.add(
+          Marker(
+            point: LatLng(lat, lng),
+            width: 25,
+            height: 25,
+            child: const Text(
+              '😘',
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+        );
+      }
     } else {
       _distanceInMeters = null;
     }
@@ -262,24 +264,9 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
     }
   }
 
-  Future<void> _stopSharing() async {
-    await FirebaseService.instance.locationsRef
-        .child(_currentUserId!)
-        .update({'isSharing': false});
-
-    setState(() {
-      _isSharing = false;
-    });
-
-    if (mounted) {
-      Navigator.pop(context);
-    }
-  }
-
   @override
   void dispose() {
     _locationsSubscription?.cancel();
-    _locationUpdateTimer?.cancel();
     
     // Stop sharing when leaving screen
     if (_currentUserId != null) {
@@ -363,7 +350,9 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                   Icon(Icons.favorite, color: Colors.pink.shade400, size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    '${_markers.length} ${_markers.length == 1 ? 'person' : 'people'} sharing',
+                    _markers.length == 2 
+                      ? 'Both online 💕'
+                      : 'Only you 💕',
                     style: TextStyle(
                       color: Colors.grey.shade700,
                       fontSize: 12,
@@ -438,53 +427,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
               ),
             ),
           ),
-          
-          // Stop Sharing Button
-          Positioned(
-            bottom: 24,
-            left: 24,
-            right: 24,
-            child: _buildStopSharingButton(),
-          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildStopSharingButton() {
-    return Material(
-      elevation: 8,
-      borderRadius: BorderRadius.circular(30),
-      child: InkWell(
-        onTap: _stopSharing,
-        borderRadius: BorderRadius.circular(30),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppTheme.deepPurple,
-                AppTheme.primaryLavender,
-              ],
-            ),
-            borderRadius: BorderRadius.circular(30),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.location_off, color: Colors.white),
-              const SizedBox(width: 12),
-              Text(
-                'Stop Sharing Location',
-                style: AppTheme.invitationMessage.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

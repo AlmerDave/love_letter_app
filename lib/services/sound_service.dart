@@ -8,6 +8,12 @@ enum SoundType {
   accepted,
   letterRejected, // Sound for when a letter is rejected
   tap,
+  
+  // ==================== BUBU & DUDU JOURNEY SOUNDS ====================
+  journeyNotification,  // When Dudu clicks "I'm here!"
+  journeyFootsteps,     // While Bubu runs LEFT
+  journeyReunion,       // When reunited 💕
+  journeyWhoosh,        // When Bubu disappears/enters
 }
 
 /// A singleton service to manage and play sound effects.
@@ -46,7 +52,25 @@ class SoundService {
         // A subtle tap sound for UI interactions (optional).
         soundPath = 'sounds/tap.mp3';
         break;
-      }
+        
+      // ==================== JOURNEY SOUNDS ====================
+      case SoundType.journeyNotification:
+        // Notification sound when Dudu clicks "I'm here!"
+        soundPath = 'sounds/journey_notification.mp3';
+        break;
+      case SoundType.journeyFootsteps:
+        // Footsteps sound while Bubu runs LEFT
+        soundPath = 'sounds/journey_footsteps.mp3';
+        break;
+      case SoundType.journeyReunion:
+        // Celebration sound when Bubu and Dudu reunite
+        soundPath = 'sounds/journey_reunion.mp3';
+        break;
+      case SoundType.journeyWhoosh:
+        // Whoosh sound when Bubu disappears/enters screen
+        soundPath = 'sounds/journey_whoosh.mp3';
+        break;
+    }
 
     try {
       // Use a low-latency player for short sound effects.
@@ -55,7 +79,7 @@ class SoundService {
       // Log any errors if the sound fails to play.
       print("Error playing sound '$soundPath': $e");
     }
-    }
+  }
 
   void dispose() => _player.dispose();
 }

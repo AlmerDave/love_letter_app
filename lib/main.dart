@@ -34,7 +34,7 @@ class LoveLettersApp extends StatelessWidget {
     return MaterialApp(
       title: 'Love Letters',
       theme: AppTheme.lightTheme,
-      home: const EntranceScreen(),
+      home: const EntranceScreen(), // EntranceScreen should navigate to MainNavigation
       debugShowCheckedModeBanner: false,
     );
   }
