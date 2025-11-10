@@ -22,6 +22,31 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
   bool _isHandlingLocationTap = false;
+  bool _isCheckingNickname = true;
+  bool _hasNickname = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkNicknameOnStart();
+  }
+
+  Future<void> _checkNicknameOnStart() async {
+    final hasNickname = await UserService.hasNickname();
+    
+    if (!hasNickname) {
+      // Force nickname dialog - no cancel option
+      final nickname = await _showMandatoryNicknameDialog();
+      if (nickname != null && nickname.isNotEmpty) {
+        await UserService.saveNickname(nickname);
+      }
+    }
+    
+    setState(() {
+      _hasNickname = true;
+      _isCheckingNickname = false;
+    });
+  }
   
   // Screens for each tab
   final List<Widget> _screens = [
@@ -32,6 +57,28 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
+    // Show loading screen while checking nickname
+    if (_isCheckingNickname) {
+      return Scaffold(
+        backgroundColor: AppTheme.warmCream,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: AppTheme.deepPurple),
+              const SizedBox(height: 24),
+              Text(
+                'Loading...',
+                style: TextStyle(
+                  color: AppTheme.darkText,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
@@ -134,19 +181,11 @@ class _MainNavigationState extends State<MainNavigation> {
 
   Future<bool> _handleLocationTabTap() async {
     try {
-      // Step 1: Check if user has nickname locally
-      bool hasNickname = await UserService.hasNickname();
-      
-      String? nickname;
-      if (!hasNickname) {
-        nickname = await _showNicknameDialog();
-        if (nickname == null || nickname.isEmpty) {
-          return false; // User cancelled
-        }
-        // Save locally (will be stored as lowercase)
-        await UserService.saveNickname(nickname);
-      } else {
-        nickname = await UserService.getNickname();
+      // Get nickname (we know it exists because we checked on startup)
+      final nickname = await UserService.getNickname();
+      if (nickname == null || nickname.isEmpty) {
+        _showErrorMessage('Nickname not found. Please restart app.');
+        return false;
       }
 
       // Step 2: Get current location
@@ -209,87 +248,94 @@ class _MainNavigationState extends State<MainNavigation> {
     }
   }
 
-  Future<String?> _showNicknameDialog() async {
-    String? nickname;
+  Future<String?> _showMandatoryNicknameDialog() async {
+    String nickname = '';
     
     return showDialog<String>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        backgroundColor: AppTheme.warmCream,
-        title: Column(
-          children: [
-            Icon(
-              Icons.favorite,
-              color: AppTheme.deepPurple,
-              size: 48,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'What\'s your name? 💕',
-              style: AppTheme.romanticTitle.copyWith(
-                fontSize: 20,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false, // Prevent Android back button
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          backgroundColor: AppTheme.warmCream,
+          title: Column(
+            children: [
+              Icon(
+                Icons.favorite,
                 color: AppTheme.deepPurple,
+                size: 48,
               ),
-              textAlign: TextAlign.center,
+              const SizedBox(height: 12),
+              Text(
+                'Welcome! What\'s your name? 💕',
+                style: AppTheme.romanticTitle.copyWith(
+                  fontSize: 20,
+                  color: AppTheme.deepPurple,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Required to continue',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+          content: TextField(
+            autofocus: true,
+            textAlign: TextAlign.center,
+            style: AppTheme.invitationMessage.copyWith(fontSize: 16),
+            decoration: InputDecoration(
+              hintText: 'Enter your nickname',
+              hintStyle: TextStyle(color: Colors.grey.shade400),
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppTheme.primaryLavender),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: AppTheme.deepPurple, width: 2),
+              ),
+            ),
+            onChanged: (value) {
+              nickname = value;
+            },
+            onSubmitted: (value) {
+              if (value.isNotEmpty) {
+                Navigator.pop(context, value);
+              }
+            },
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                if (nickname.isNotEmpty) {
+                  Navigator.pop(context, nickname);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.deepPurple,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: const Text(
+                'Continue',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),
-        content: TextField(
-          autofocus: true,
-          textAlign: TextAlign.center,
-          style: AppTheme.invitationMessage.copyWith(fontSize: 16),
-          decoration: InputDecoration(
-            hintText: 'Enter your nickname',
-            hintStyle: TextStyle(color: Colors.grey.shade400),
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppTheme.primaryLavender),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: AppTheme.deepPurple, width: 2),
-            ),
-          ),
-          onChanged: (value) => nickname = value,
-          onSubmitted: (value) {
-            if (value.isNotEmpty) {
-              Navigator.pop(context, value);
-            }
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nickname != null && nickname!.isNotEmpty) {
-                Navigator.pop(context, nickname);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.deepPurple,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
-            child: const Text(
-              'Continue',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
       ),
     );
   }

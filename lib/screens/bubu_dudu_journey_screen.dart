@@ -35,57 +35,73 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
   bool _isCheckingRole = true;
   bool _isInitialized = false;
 
-@override
-void initState() {
-  super.initState();
-  WidgetsBinding.instance.addObserver(this);
+  // GIF cycling indices
+  int _bubuIdleIndex = 0;
+  int _duduIdleIndex = 0;
+  int _togetherIndex = 0;
 
-  if (_hasCheckedRole && _userRole != UserRole.unknown) {
-    // Already determined valid user → directly reinitialize services
-    print('🔁 Returning to journey tab — reinitializing services');
-    _initializeServices();
-  } else {
-    // First-time load or unknown user
-    print('🆕 First-time journey tab load — checking user role');
-    _checkUserRole();
+  // Timers for GIF cycling
+  Timer? _bubuIdleTimer;
+  Timer? _duduIdleTimer;
+  Timer? _togetherTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    if (_hasCheckedRole && _userRole != UserRole.unknown) {
+      print('🔁 Returning to journey tab — reinitializing services');
+      _initializeServices();
+    } else {
+      print('🆕 First-time journey tab load — checking user role');
+      _checkUserRole();
+    }
   }
-}
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _stopAllTimers();
     _cleanup();
     super.dispose();
   }
 
-  /// Called when app lifecycle changes (tab switch detection)
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
 
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      if (_isInitialized) {
-        print('🔄 App minimized or tab switched — resetting session and cleaning up');
-        _handleTabSwitch();
-        _cleanup();
-        _isInitialized = false;
-      }
+    // if (state == AppLifecycleState.paused) {
+    //   print('📱 App paused - stopping listeners only');
+    //   _pauseServices();
+    // } else if (state == AppLifecycleState.resumed) {
+    //   print('📱 App resumed - restarting listeners');
+    //   _resumeServices();
+    // }
+  }
 
-      // ✅ After cleanup, re-check role (role may now be known)
-      if (_userRole == UserRole.unknown || !_hasCheckedRole) {
-        print('🔍 Role not set or not yet checked — checking again after pause');
-        _checkUserRole();
-      } else {
-        print('♻️ Known user detected (${_userRole.name}) — reinitializing services');
-        _initializeServices();
-      }
+  void _pauseServices() {
+    if (_isInitialized) {
+      MotionService.instance.stopListening();
+      _stopAllTimers();
+      print('⏸️ Services paused');
     }
   }
 
+  void _resumeServices() {
+    if (_isInitialized && _userRole != UserRole.unknown) {
+      MotionService.instance.startListening(
+        userRole: _userRole.name,
+        onLeftDetected: _handleLeftMovementDetected,
+      );
+      _startAppropriateTimer();
+      print('▶️ Services resumed');
+    }
+  }
 
   Future<void> _checkUserRole() async {
     await _determineUserRole();
-    _hasCheckedRole = true; // ✅ cache role check
+    _hasCheckedRole = true;
 
     setState(() {
       _isCheckingRole = false;
@@ -98,25 +114,21 @@ void initState() {
     }
   }
 
-  /// Initialize Firebase and motion services only for valid users
   Future<void> _initializeServices() async {
-    // Step 1: Reset session when entering this screen
     await BubuDuduService.instance.resetSession();
-
-    // Step 2: Start listening to Firebase session
     await BubuDuduService.instance.startListening();
-
-    // Step 3: Subscribe to session changes
     _sessionSubscription = BubuDuduService.instance.sessionStream.listen(_handleSessionUpdate);
 
-    // Step 4: Start motion detection
     MotionService.instance.startListening(
+      userRole: _userRole.name,
       onLeftDetected: _handleLeftMovementDetected,
     );
 
     setState(() {
       _isInitialized = true;
     });
+
+    _startAppropriateTimer();
 
     print('✅ Journey screen initialized - Role: $_userRole');
   }
@@ -150,31 +162,32 @@ void initState() {
   void _updateBubuState(JourneySession session) {
     setState(() {
       if (session.currentState == 'idle') {
-        _bubuState = BubuState.idle;
+        if (_bubuState != BubuState.idle) {
+          _bubuState = BubuState.idle;
+          _startBubuIdleTimer();
+        }
       } else if (session.duduReady && !session.bothPhonesMovedLeft) {
-        // Dudu clicked "I'm here!" - Get excited and run
         if (_bubuState != BubuState.runningLeft) {
+          _stopAllTimers();
           _bubuState = BubuState.excited;
-          SoundService.instance.playSound(SoundType.journeyNotification);
+          // SoundService.instance.playSound(SoundType.journeyNotification);
           HapticFeedback.mediumImpact();
           
-          // After 1 second, start running
           Future.delayed(const Duration(seconds: 1), () {
             if (mounted) {
               setState(() {
                 _bubuState = BubuState.runningLeft;
               });
-              SoundService.instance.playSound(SoundType.journeyFootsteps);
+              // SoundService.instance.playSound(SoundType.journeyFootsteps);
             }
           });
         }
       } else if (session.bothPhonesMovedLeft) {
-        // Both phones pushed LEFT - Depart!
+        _stopAllTimers();
         _bubuState = BubuState.departed;
-        SoundService.instance.playSound(SoundType.journeyWhoosh);
+        // SoundService.instance.playSound(SoundType.journeyWhoosh);
         HapticFeedback.heavyImpact();
         
-        // Signal departure to Firebase
         Future.delayed(const Duration(milliseconds: 500), () {
           BubuDuduService.instance.bubuDeparted();
         });
@@ -185,25 +198,30 @@ void initState() {
   void _updateDuduState(JourneySession session) {
     setState(() {
       if (session.currentState == 'idle') {
-        _duduState = DuduState.idle;
+        if (_duduState != DuduState.idle) {
+          _duduState = DuduState.idle;
+          _startDuduIdleTimer();
+        }
       } else if (session.duduReady && !session.bothPhonesMovedLeft) {
+        _stopAllTimers();
         _duduState = DuduState.ready;
       } else if (session.bothPhonesMovedLeft && !session.bubuDeparted) {
+        _stopAllTimers();
         _duduState = DuduState.waiting;
       } else if (session.bubuDeparted) {
-        // Bubu is traveling - Show arriving animation
+        _stopAllTimers();
         _duduState = DuduState.bubuArriving;
-        SoundService.instance.playSound(SoundType.journeyWhoosh);
+        // SoundService.instance.playSound(SoundType.journeyWhoosh);
         
-        // After 2 seconds, reunion!
         Future.delayed(const Duration(seconds: 2), () {
           if (mounted) {
             setState(() {
               _duduState = DuduState.together;
             });
             BubuDuduService.instance.bubuArrived();
-            SoundService.instance.playSound(SoundType.journeyReunion);
+            // SoundService.instance.playSound(SoundType.journeyReunion);
             HapticFeedback.heavyImpact();
+            _startTogetherTimer();
           }
         });
       }
@@ -220,15 +238,79 @@ void initState() {
     }
   }
 
-  Future<void> _handleTabSwitch() async {
-    // Full reset for BOTH phones
+  Future<void> _showResetDialog() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        backgroundColor: AppTheme.warmCream,
+        title: Column(
+          children: [
+            Icon(Icons.refresh, color: AppTheme.deepPurple, size: 48),
+            const SizedBox(height: 12),
+            Text(
+              'Reset Journey?',
+              style: AppTheme.romanticTitle.copyWith(
+                fontSize: 20,
+                color: AppTheme.deepPurple,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'This will restart the journey for both phones. 🔄',
+          textAlign: TextAlign.center,
+          style: AppTheme.invitationMessage.copyWith(
+            color: AppTheme.darkText,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey.shade600)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.deepPurple,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Reset', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _handleManualReset();
+    }
+  }
+
+  Future<void> _handleManualReset() async {
+    _stopAllTimers();
     await BubuDuduService.instance.resetSession();
-    
-    // Reset local states
     setState(() {
       _bubuState = BubuState.idle;
       _duduState = DuduState.idle;
+      _bubuIdleIndex = 0;
+      _duduIdleIndex = 0;
+      _togetherIndex = 0;
     });
+    _startAppropriateTimer();
+    // SoundService.instance.playSound(SoundType.journeyNotification);
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Journey reset! 🔄'),
+        backgroundColor: AppTheme.deepPurple,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   void _cleanup() {
@@ -236,30 +318,98 @@ void initState() {
       _sessionSubscription?.cancel();
       BubuDuduService.instance.stopListening();
       MotionService.instance.stopListening();
+      _stopAllTimers();
       print('🧹 Journey services cleaned up');
     }
-
-    // ⚠️ Keep role and _hasCheckedRole cached
   }
+
+  // ==================== TIMER MANAGEMENT ====================
+
+  void _startAppropriateTimer() {
+    if (_userRole == UserRole.bubu && _bubuState == BubuState.idle) {
+      _startBubuIdleTimer();
+    } else if (_userRole == UserRole.dudu) {
+      if (_duduState == DuduState.idle) {
+        _startDuduIdleTimer();
+      } else if (_duduState == DuduState.together) {
+        _startTogetherTimer();
+      }
+    }
+  }
+
+  void _startBubuIdleTimer() {
+    _bubuIdleTimer?.cancel();
+    if (JourneyAssets.bubuIdleGifs.length > 1) {
+      _bubuIdleTimer = Timer.periodic(
+        Duration(seconds: JourneyAssets.idleGifDuration),
+        (timer) {
+          if (mounted && _bubuState == BubuState.idle) {
+            setState(() {
+              _bubuIdleIndex = (_bubuIdleIndex + 1) % JourneyAssets.bubuIdleGifs.length;
+            });
+          }
+        },
+      );
+    }
+  }
+
+  void _startDuduIdleTimer() {
+    _duduIdleTimer?.cancel();
+    if (JourneyAssets.duduIdleGifs.length > 1) {
+      _duduIdleTimer = Timer.periodic(
+        Duration(seconds: JourneyAssets.idleGifDuration),
+        (timer) {
+          if (mounted && _duduState == DuduState.idle) {
+            setState(() {
+              _duduIdleIndex = (_duduIdleIndex + 1) % JourneyAssets.duduIdleGifs.length;
+            });
+          }
+        },
+      );
+    }
+  }
+
+  void _startTogetherTimer() {
+    _togetherTimer?.cancel();
+    if (JourneyAssets.togetherGifs.length > 1) {
+      _togetherTimer = Timer.periodic(
+        Duration(seconds: JourneyAssets.togetherGifDuration),
+        (timer) {
+          if (mounted && _duduState == DuduState.together) {
+            setState(() {
+              _togetherIndex = (_togetherIndex + 1) % JourneyAssets.togetherGifs.length;
+            });
+          }
+        },
+      );
+    }
+  }
+
+  void _stopAllTimers() {
+    _bubuIdleTimer?.cancel();
+    _duduIdleTimer?.cancel();
+    _togetherTimer?.cancel();
+    _bubuIdleTimer = null;
+    _duduIdleTimer = null;
+    _togetherTimer = null;
+  }
+
+  // ==================== BUILD METHODS ====================
 
   @override
   Widget build(BuildContext context) {
-    // Show loading while checking role
     if (_isCheckingRole) {
       return _buildRoleCheckingScreen();
     }
 
-    // Show unknown user screen if role not recognized (don't initialize services)
     if (_userRole == UserRole.unknown) {
       return _buildUnknownUserScreen();
     }
 
-    // Show loading while initializing services
     if (!_isInitialized) {
       return _buildLoadingScreen();
     }
 
-    // Show the journey screen
     return Scaffold(
       backgroundColor: AppTheme.warmCream,
       body: SafeArea(
@@ -348,7 +498,7 @@ void initState() {
   Widget _buildBubuScreen() {
     return Column(
       children: [
-        _buildHeader('Bubu\'s Phone 🐻'),
+        _buildHeader('Bubu\'s Phone'),
         Expanded(
           child: Center(
             child: _buildBubuAnimation(),
@@ -364,7 +514,7 @@ void initState() {
     
     switch (_bubuState) {
       case BubuState.idle:
-        assetPath = JourneyAssets.bubuIdle;
+        assetPath = JourneyAssets.bubuIdleGifs[_bubuIdleIndex];
         break;
       case BubuState.excited:
         assetPath = JourneyAssets.bubuExcited;
@@ -397,7 +547,7 @@ void initState() {
   Widget _buildDuduScreen() {
     return Column(
       children: [
-        _buildHeader('Dudu\'s Phone 🐰'),
+        _buildHeader('Dudu\'s Phone'),
         Expanded(
           child: Center(
             child: _buildDuduAnimation(),
@@ -414,7 +564,7 @@ void initState() {
     
     switch (_duduState) {
       case DuduState.idle:
-        assetPath = JourneyAssets.duduIdle;
+        assetPath = JourneyAssets.duduIdleGifs[_duduIdleIndex];
         break;
       case DuduState.ready:
         assetPath = JourneyAssets.duduReady;
@@ -425,7 +575,7 @@ void initState() {
       case DuduState.bubuArriving:
         return _buildBubuArrivingAnimation();
       case DuduState.together:
-        assetPath = JourneyAssets.together;
+        assetPath = JourneyAssets.togetherGifs[_togetherIndex];
         break;
     }
 
@@ -480,7 +630,7 @@ void initState() {
 
   void _onImHerePressed() {
     BubuDuduService.instance.duduReady();
-    SoundService.instance.playSound(SoundType.journeyNotification);
+    // SoundService.instance.playSound(SoundType.journeyNotification);
     HapticFeedback.mediumImpact();
   }
 
@@ -500,16 +650,25 @@ void initState() {
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(Icons.favorite, color: AppTheme.deepPurple, size: 20),
-          const SizedBox(width: 8),
-          Text(
-            title,
-            style: AppTheme.romanticTitle.copyWith(
-              color: AppTheme.deepPurple,
-              fontSize: 18,
-            ),
+          const SizedBox(width: 40),
+          Row(
+            children: [
+              Icon(Icons.favorite, color: AppTheme.deepPurple, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: AppTheme.romanticTitle.copyWith(
+                  color: AppTheme.deepPurple,
+                  fontSize: 18,
+                ),
+              ),
+            ],
+          ),
+          IconButton(
+            icon: Icon(Icons.refresh, color: AppTheme.deepPurple),
+            onPressed: _showResetDialog,
           ),
         ],
       ),
@@ -523,7 +682,6 @@ void initState() {
       height: 250,
       fit: BoxFit.contain,
       errorBuilder: (context, error, stackTrace) {
-        // Fallback to placeholder if GIF not found
         return _buildPlaceholder();
       },
     );
@@ -570,7 +728,7 @@ void initState() {
           opacity: progress,
           child: Transform.translate(
             offset: Offset(300 * (1 - progress), 0),
-            child: _buildCharacterImage(JourneyAssets.bubuRunningLeft),
+            child: _buildCharacterImage(JourneyAssets.bubuArriving),
           ),
         );
       },
