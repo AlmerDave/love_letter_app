@@ -43,6 +43,8 @@ class JourneyAssets {
   
   /// Bubu arriving on Dudu's phone (slides in from right)
   static const String bubuArriving = 'assets/images/bubu_dudu_gifs/bubu_running_2.gif';
+
+  static const String reunionAnimation = 'assets/images/bubu_dudu_gifs/bubu_entering.gif';
   
   // ==================== TOGETHER ANIMATIONS (Multiple GIFs) ====================
   

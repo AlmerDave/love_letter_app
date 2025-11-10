@@ -7,7 +7,6 @@ import 'package:love_letter_app/utils/theme.dart';
 import 'package:love_letter_app/utils/journey_assets.dart';
 import 'package:love_letter_app/services/user_service.dart';
 import 'package:love_letter_app/services/bubu_dudu_service.dart';
-import 'package:love_letter_app/services/motion_service.dart';
 import 'package:love_letter_app/services/sound_service.dart';
 import 'package:love_letter_app/models/journey_session.dart';
 
@@ -15,7 +14,7 @@ enum UserRole { bubu, dudu, unknown }
 
 enum BubuState { idle, excited, runningLeft, departed }
 
-enum DuduState { idle, ready, waiting, bubuArriving, together }
+enum DuduState { idle, ready, waiting, bubuArriving, reunionAnimation, together }
 
 class BubuDuduJourneyScreen extends StatefulWidget {
   const BubuDuduJourneyScreen({Key? key}) : super(key: key);
@@ -29,6 +28,7 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
   UserRole _userRole = UserRole.unknown;
   BubuState _bubuState = BubuState.idle;
   DuduState _duduState = DuduState.idle;
+  bool _bubuArrivalSequenceStarted = false;
 
   StreamSubscription<JourneySession>? _sessionSubscription;
   bool _hasCheckedRole = false;
@@ -44,6 +44,9 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
   Timer? _bubuIdleTimer;
   Timer? _duduIdleTimer;
   Timer? _togetherTimer;
+
+  // Swipe gesture detection
+  bool _isSwipeEnabled = false;
 
   @override
   void initState() {
@@ -70,19 +73,10 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-
-    // if (state == AppLifecycleState.paused) {
-    //   print('📱 App paused - stopping listeners only');
-    //   _pauseServices();
-    // } else if (state == AppLifecycleState.resumed) {
-    //   print('📱 App resumed - restarting listeners');
-    //   _resumeServices();
-    // }
   }
 
   void _pauseServices() {
     if (_isInitialized) {
-      MotionService.instance.stopListening();
       _stopAllTimers();
       print('⏸️ Services paused');
     }
@@ -90,10 +84,6 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
 
   void _resumeServices() {
     if (_isInitialized && _userRole != UserRole.unknown) {
-      MotionService.instance.startListening(
-        userRole: _userRole.name,
-        onLeftDetected: _handleLeftMovementDetected,
-      );
       _startAppropriateTimer();
       print('▶️ Services resumed');
     }
@@ -118,11 +108,6 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
     await BubuDuduService.instance.resetSession();
     await BubuDuduService.instance.startListening();
     _sessionSubscription = BubuDuduService.instance.sessionStream.listen(_handleSessionUpdate);
-
-    MotionService.instance.startListening(
-      userRole: _userRole.name,
-      onLeftDetected: _handleLeftMovementDetected,
-    );
 
     setState(() {
       _isInitialized = true;
@@ -164,12 +149,14 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
       if (session.currentState == 'idle') {
         if (_bubuState != BubuState.idle) {
           _bubuState = BubuState.idle;
+          _isSwipeEnabled = false;
           _startBubuIdleTimer();
         }
       } else if (session.duduReady && !session.bothPhonesMovedLeft) {
         if (_bubuState != BubuState.runningLeft) {
           _stopAllTimers();
           _bubuState = BubuState.excited;
+          _isSwipeEnabled = true; // Enable swipe detection
           // SoundService.instance.playSound(SoundType.journeyNotification);
           HapticFeedback.mediumImpact();
           
@@ -184,6 +171,7 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
         }
       } else if (session.bothPhonesMovedLeft) {
         _stopAllTimers();
+        _isSwipeEnabled = false;
         _bubuState = BubuState.departed;
         // SoundService.instance.playSound(SoundType.journeyWhoosh);
         HapticFeedback.heavyImpact();
@@ -209,33 +197,41 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
         _stopAllTimers();
         _duduState = DuduState.waiting;
       } else if (session.bubuDeparted) {
+        if (_bubuArrivalSequenceStarted) return;
+        _bubuArrivalSequenceStarted = true;
         _stopAllTimers();
+
         _duduState = DuduState.bubuArriving;
-        // SoundService.instance.playSound(SoundType.journeyWhoosh);
-        
+
         Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
+          if (!mounted) return;
+
+          setState(() {
+            _duduState = DuduState.reunionAnimation;
+          });
+
+          Future.delayed(const Duration(milliseconds: 1600), () {
+            if (!mounted) return;
+
             setState(() {
               _duduState = DuduState.together;
             });
+
             BubuDuduService.instance.bubuArrived();
-            // SoundService.instance.playSound(SoundType.journeyReunion);
             HapticFeedback.heavyImpact();
             _startTogetherTimer();
-          }
+          });
         });
       }
     });
   }
 
-  void _handleLeftMovementDetected() {
-    print('⬅️ LEFT movement detected!');
+  void _handleSwipeLeft() {
+    if (!_isSwipeEnabled || _userRole != UserRole.bubu) return;
     
-    if (_userRole == UserRole.dudu) {
-      BubuDuduService.instance.duduMovedLeft();
-    } else if (_userRole == UserRole.bubu) {
-      BubuDuduService.instance.bubuMovedLeft();
-    }
+    print('👆 Swipe LEFT detected!');
+    BubuDuduService.instance.bubuMovedLeft();
+    _isSwipeEnabled = false; // Prevent multiple swipes
   }
 
   Future<void> _showResetDialog() async {
@@ -299,6 +295,8 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
       _bubuIdleIndex = 0;
       _duduIdleIndex = 0;
       _togetherIndex = 0;
+      _bubuArrivalSequenceStarted = false;
+      _isSwipeEnabled = false;
     });
     _startAppropriateTimer();
     // SoundService.instance.playSound(SoundType.journeyNotification);
@@ -317,7 +315,6 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
     if (_isInitialized) {
       _sessionSubscription?.cancel();
       BubuDuduService.instance.stopListening();
-      MotionService.instance.stopListening();
       _stopAllTimers();
       print('🧹 Journey services cleaned up');
     }
@@ -496,16 +493,23 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
   // ==================== BUBU SCREEN (RIGHT PHONE) ====================
   
   Widget _buildBubuScreen() {
-    return Column(
-      children: [
-        _buildHeader('Bubu\'s Phone'),
-        Expanded(
-          child: Center(
-            child: _buildBubuAnimation(),
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        if (details.primaryVelocity != null && details.primaryVelocity! < -500) {
+          _handleSwipeLeft();
+        }
+      },
+      child: Column(
+        children: [
+          _buildHeader('Bubu\'s Phone'),
+          Expanded(
+            child: Center(
+              child: _buildBubuAnimation(),
+            ),
           ),
-        ),
-        _buildStateIndicator(_getBubuStateText()),
-      ],
+          _buildStateIndicator(_getBubuStateText()),
+        ],
+      ),
     );
   }
 
@@ -536,7 +540,7 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
       case BubuState.excited:
         return 'Dudu is here! 😊';
       case BubuState.runningLeft:
-        return 'Running to Dudu! 🏃‍♀️💨';
+        return 'Swipe LEFT to go to Dudu! 👆⬅️';
       case BubuState.departed:
         return 'Traveling to Dudu\'s phone... ✨';
     }
@@ -574,6 +578,9 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
         break;
       case DuduState.bubuArriving:
         return _buildBubuArrivingAnimation();
+      case DuduState.reunionAnimation:
+        assetPath = JourneyAssets.reunionAnimation;
+        break;
       case DuduState.together:
         assetPath = JourneyAssets.togetherGifs[_togetherIndex];
         break;
@@ -587,11 +594,12 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
       case DuduState.idle:
         return 'Waiting for you to signal... 💭';
       case DuduState.ready:
-        return 'Push both phones LEFT! ⬅️';
+        return 'Waiting for Bubu to swipe... 💕';
       case DuduState.waiting:
         return 'Waiting for Bubu to arrive... 💕';
       case DuduState.bubuArriving:
         return 'Bubu is coming! 🌟';
+      case DuduState.reunionAnimation:
       case DuduState.together:
         return 'Together at last! 💕✨';
     }
@@ -630,6 +638,7 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
 
   void _onImHerePressed() {
     BubuDuduService.instance.duduReady();
+    BubuDuduService.instance.duduMovedLeft(); // Auto-set duduMovedLeft
     // SoundService.instance.playSound(SoundType.journeyNotification);
     HapticFeedback.mediumImpact();
   }

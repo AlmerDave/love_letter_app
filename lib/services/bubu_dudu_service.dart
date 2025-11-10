@@ -63,19 +63,34 @@ class BubuDuduService {
     print('🔄 Session reset to idle');
   }
 
-  /// Update specific fields in the session
+  /// Update specific fields in the session only if values have changed
   Future<void> updateSession(Map<String, dynamic> updates) async {
-    // Add timestamp to all updates
-    updates['timestamp'] = DateTime.now().millisecondsSinceEpoch;
+    final snapshot = await _sessionRef.get();
     
-    await _sessionRef.update(updates);
-    print('✅ Session updated: $updates');
+    final raw = snapshot.value;
+    final Map<String, dynamic> currentData = (raw != null)
+        ? Map<String, dynamic>.from(raw as Map)
+        : {};
+
+    final Map<String, dynamic> filteredUpdates = {};
+    updates.forEach((key, value) {
+      if (currentData[key] != value) {
+        filteredUpdates[key] = value;
+      }
+    });
+
+    if (filteredUpdates.isEmpty) return;
+
+    filteredUpdates['timestamp'] = DateTime.now().millisecondsSinceEpoch;
+
+    await _sessionRef.update(filteredUpdates);
   }
 
   /// Dudu clicks "I'm here!" button
   Future<void> duduReady() async {
     await updateSession({
       'duduReady': true,
+      'duduMovedLeft': true,
       'currentState': 'dudu_ready',
     });
   }

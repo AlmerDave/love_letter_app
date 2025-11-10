@@ -17,8 +17,8 @@ class MotionService {
   Function? onLeftMovementDetected;
 
   // Role-based thresholds (approximate distances)
-  static const double _bubuThreshold = -4.5; // needs larger move (~5cm)
-  static const double _duduThreshold = -2.5; // small move (~2cm)
+  static const double _bubuThreshold = -1.5; // needs larger move (~5cm)
+  static const double _duduThreshold = -1.0; // small move (~2cm)
 
   // Debounce time
   static const Duration _debounceDuration = Duration(seconds: 1);
