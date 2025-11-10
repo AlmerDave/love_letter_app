@@ -16,6 +16,8 @@ class JourneyAssets {
   static const List<String> bubuIdleGifs = [
     'assets/images/bubu_dudu_gifs/bubu_idle_1.gif',
     'assets/images/bubu_dudu_gifs/bubu_idle_2.gif',
+    'assets/images/bubu_dudu_gifs/bubu_idle_3.gif',
+    'assets/images/bubu_dudu_gifs/bubu_idle_4.gif',
     // Add more bubu idle GIFs here as needed
   ];
   
@@ -24,6 +26,8 @@ class JourneyAssets {
   static const List<String> duduIdleGifs = [
     'assets/images/bubu_dudu_gifs/dudu_idle.gif',
     'assets/images/bubu_dudu_gifs/dudu_idle_1.gif',
+    'assets/images/bubu_dudu_gifs/dudu_idle_2.gif',
+    'assets/images/bubu_dudu_gifs/dudu_idle_3.gif',
     // Add more dudu idle GIFs here as needed
   ];
   

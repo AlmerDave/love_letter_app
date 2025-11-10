@@ -1,85 +1,180 @@
 // lib/services/sound_service.dart
 import 'package:audioplayers/audioplayers.dart';
+import 'dart:async';
 
 /// Enum to define the different types of sound effects in the app.
 enum SoundType {
   letterUnlock,
   newLetter,
   accepted,
-  letterRejected, // Sound for when a letter is rejected
+  letterRejected,
   tap,
   
   // ==================== BUBU & DUDU JOURNEY SOUNDS ====================
-  journeyNotification,  // When Dudu clicks "I'm here!"
+  journeyNotification,
+  journeyImhere,        // When Dudu clicks "I'm here!"  
   journeyFootsteps,     // While Bubu runs LEFT
   journeyReunion,       // When reunited 💕
   journeyWhoosh,        // When Bubu disappears/enters
 }
 
 /// A singleton service to manage and play sound effects.
-/// This ensures we use a single audio player instance throughout the app.
 class SoundService {
-  // Private constructor for the singleton pattern.
   SoundService._privateConstructor();
   static final SoundService instance = SoundService._privateConstructor();
 
-  final AudioPlayer _player = AudioPlayer();
+  // Separate players for different audio purposes
+  final AudioPlayer _sfxPlayer = AudioPlayer();      // For sound effects
+  final AudioPlayer _musicPlayer = AudioPlayer();    // For background music
+  
+  Timer? _stopTimer;  // Timer to track scheduled sound stops
 
-  /// Plays a sound based on the given [SoundType].
-  ///
-  /// It maps the enum to a specific asset path and plays the sound.
-  /// Make sure you have the corresponding .mp3 files in your `assets/sounds/` directory.
+  /// Plays a regular sound effect (full duration, no control).
+  /// Used for UI sounds like taps, unlocks, etc.
   Future<void> playSound(SoundType type) async {
     String? soundPath;
     switch (type) {
       case SoundType.letterUnlock:
-        // A magical chime for when a locked letter becomes available.
         soundPath = 'sounds/unlock_chime.mp3';
         break;
       case SoundType.newLetter:
-        // An exciting sound for when a new letter is added via QR code.
         soundPath = 'sounds/new_letter.mp3';
         break;
       case SoundType.accepted:
-        // A happy, celebratory sound for accepting an invitation.
         soundPath = 'sounds/accepted.mp3';
         break;
       case SoundType.letterRejected:
-        // A soft, sad sound for when an invitation is rejected.
         soundPath = 'sounds/rejected.mp3';
         break;
       case SoundType.tap:
-        // A subtle tap sound for UI interactions (optional).
         soundPath = 'sounds/tap.mp3';
         break;
-        
-      // ==================== JOURNEY SOUNDS ====================
-      case SoundType.journeyNotification:
-        // Notification sound when Dudu clicks "I'm here!"
-        soundPath = 'sounds/journey_notification.mp3';
-        break;
-      case SoundType.journeyFootsteps:
-        // Footsteps sound while Bubu runs LEFT
-        soundPath = 'sounds/journey_footsteps.mp3';
-        break;
-      case SoundType.journeyReunion:
-        // Celebration sound when Bubu and Dudu reunite
-        soundPath = 'sounds/journey_reunion.mp3';
-        break;
-      case SoundType.journeyWhoosh:
-        // Whoosh sound when Bubu disappears/enters screen
-        soundPath = 'sounds/journey_whoosh.mp3';
-        break;
+      default:
+        print("Warning: ${type.name} should use playJourneySound() instead");
+        return;
     }
 
     try {
-      // Use a low-latency player for short sound effects.
-      await _player.play(AssetSource(soundPath), mode: PlayerMode.lowLatency);
+      await _sfxPlayer.play(AssetSource(soundPath), mode: PlayerMode.lowLatency);
     } catch (e) {
-      // Log any errors if the sound fails to play.
       print("Error playing sound '$soundPath': $e");
     }
   }
 
-  void dispose() => _player.dispose();
+  /// Plays journey-related sounds with optional duration control and looping.
+  /// 
+  /// [type] - The journey sound to play
+  /// [duration] - Optional duration to play. If null, plays the entire sound.
+  /// [loop] - If true, loops the sound indefinitely until stopped
+  /// 
+  /// Example:
+  /// - playJourneySound(SoundType.journeyFootsteps, loop: true) → loops forever
+  /// - playJourneySound(SoundType.journeyWhoosh) → plays once
+  Future<void> playJourneySound(SoundType type, {Duration? duration, bool loop = false}) async {
+    String? soundPath;
+    switch (type) {
+      case SoundType.journeyNotification:
+        soundPath = 'sounds/accepted.mp3';
+        break;
+      case SoundType.journeyImhere:
+        soundPath = 'sounds/journey_notification.mp3';
+        break;
+      case SoundType.journeyFootsteps:
+        soundPath = 'sounds/journey_footsteps.mp3';
+        break;
+      case SoundType.journeyReunion:
+        soundPath = 'sounds/journey_reunion.mp3';
+        break;
+      case SoundType.journeyWhoosh:
+        soundPath = 'sounds/journey_whoosh.mp3';
+        break;
+      default:
+        print("Warning: ${type.name} is not a journey sound");
+        return;
+    }
+
+    try {
+      // Cancel any existing stop timer from previous sound
+      _stopTimer?.cancel();
+      
+      // Set release mode based on loop parameter
+      if (loop) {
+        await _sfxPlayer.setReleaseMode(ReleaseMode.loop);
+      } else {
+        await _sfxPlayer.setReleaseMode(ReleaseMode.release);
+      }
+      
+      // Play the sound
+      await _sfxPlayer.play(AssetSource(soundPath), mode: PlayerMode.lowLatency);
+      
+      // If duration is specified and not looping, schedule the sound to stop
+      if (duration != null && !loop) {
+        _stopTimer = Timer(duration, () {
+          _sfxPlayer.stop();
+        });
+      }
+    } catch (e) {
+      print("Error playing journey sound '$soundPath': $e");
+    }
+  }
+
+  /// Stops any currently playing journey sound.
+  /// Useful for manually interrupting a sound.
+  Future<void> stopJourneySound() async {
+    _stopTimer?.cancel();
+    await _sfxPlayer.stop();
+  }
+
+  /// Plays journey background music on loop indefinitely.
+  /// Only stops when reset button is pressed or manually stopped.
+  Future<void> playJourneyBackgroundMusic() async {
+    try {
+      await _musicPlayer.setVolume(0.3); // Quieter than SFX
+      await _musicPlayer.setReleaseMode(ReleaseMode.loop);
+      await _musicPlayer.play(AssetSource('sounds/journey_background.mp3'));
+    } catch (e) {
+      print("Error playing journey background music: $e");
+    }
+  }
+
+  /// Plays background music on loop.
+  /// 
+  /// [assetPath] - Path to the music file (e.g., 'sounds/background_music.mp3')
+  /// [volume] - Volume level from 0.0 to 1.0 (default: 0.5)
+  Future<void> playBackgroundMusic(String assetPath, {double volume = 0.5}) async {
+    try {
+      await _musicPlayer.setVolume(volume);
+      await _musicPlayer.setReleaseMode(ReleaseMode.loop);
+      await _musicPlayer.play(AssetSource(assetPath));
+    } catch (e) {
+      print("Error playing background music '$assetPath': $e");
+    }
+  }
+
+  /// Stops the background music.
+  Future<void> stopBackgroundMusic() async {
+    await _musicPlayer.stop();
+  }
+
+  /// Pauses the background music (can be resumed later).
+  Future<void> pauseBackgroundMusic() async {
+    await _musicPlayer.pause();
+  }
+
+  /// Resumes the background music if it was paused.
+  Future<void> resumeBackgroundMusic() async {
+    await _musicPlayer.resume();
+  }
+
+  /// Sets the volume for background music.
+  /// [volume] should be between 0.0 (mute) and 1.0 (full volume)
+  Future<void> setMusicVolume(double volume) async {
+    await _musicPlayer.setVolume(volume.clamp(0.0, 1.0));
+  }
+
+  void dispose() {
+    _stopTimer?.cancel();
+    _sfxPlayer.dispose();
+    _musicPlayer.dispose();
+  }
 }

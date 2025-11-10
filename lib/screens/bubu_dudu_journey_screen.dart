@@ -115,6 +115,9 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
 
     _startAppropriateTimer();
 
+    // Add this line:
+    // SoundService.instance.playJourneyBackgroundMusic();
+
     print('✅ Journey screen initialized - Role: $_userRole');
   }
 
@@ -150,14 +153,14 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
         if (_bubuState != BubuState.idle) {
           _bubuState = BubuState.idle;
           _isSwipeEnabled = false;
+          SoundService.instance.stopJourneySound();
           _startBubuIdleTimer();
         }
       } else if (session.duduReady && !session.bothPhonesMovedLeft) {
         if (_bubuState != BubuState.runningLeft) {
           _stopAllTimers();
           _bubuState = BubuState.excited;
-          _isSwipeEnabled = true; // Enable swipe detection
-          // SoundService.instance.playSound(SoundType.journeyNotification);
+          _isSwipeEnabled = true;
           HapticFeedback.mediumImpact();
           
           Future.delayed(const Duration(seconds: 1), () {
@@ -165,7 +168,7 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
               setState(() {
                 _bubuState = BubuState.runningLeft;
               });
-              // SoundService.instance.playSound(SoundType.journeyFootsteps);
+              SoundService.instance.playJourneySound(SoundType.journeyFootsteps, loop: true);
             }
           });
         }
@@ -173,7 +176,8 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
         _stopAllTimers();
         _isSwipeEnabled = false;
         _bubuState = BubuState.departed;
-        // SoundService.instance.playSound(SoundType.journeyWhoosh);
+        SoundService.instance.stopJourneySound();
+        SoundService.instance.playJourneySound(SoundType.journeyWhoosh);
         HapticFeedback.heavyImpact();
         
         Future.delayed(const Duration(milliseconds: 500), () {
@@ -188,6 +192,7 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
       if (session.currentState == 'idle') {
         if (_duduState != DuduState.idle) {
           _duduState = DuduState.idle;
+          SoundService.instance.stopJourneySound();
           _startDuduIdleTimer();
         }
       } else if (session.duduReady && !session.bothPhonesMovedLeft) {
@@ -209,6 +214,8 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
           setState(() {
             _duduState = DuduState.reunionAnimation;
           });
+          
+          SoundService.instance.playJourneySound(SoundType.journeyReunion, loop: true);
 
           Future.delayed(const Duration(milliseconds: 1600), () {
             if (!mounted) return;
@@ -231,7 +238,7 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
     
     print('👆 Swipe LEFT detected!');
     BubuDuduService.instance.bubuMovedLeft();
-    _isSwipeEnabled = false; // Prevent multiple swipes
+    _isSwipeEnabled = false;
   }
 
   Future<void> _showResetDialog() async {
@@ -288,6 +295,8 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
 
   Future<void> _handleManualReset() async {
     _stopAllTimers();
+    SoundService.instance.stopJourneySound();
+    SoundService.instance.stopBackgroundMusic();
     await BubuDuduService.instance.resetSession();
     setState(() {
       _bubuState = BubuState.idle;
@@ -299,7 +308,7 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
       _isSwipeEnabled = false;
     });
     _startAppropriateTimer();
-    // SoundService.instance.playSound(SoundType.journeyNotification);
+    SoundService.instance.playJourneySound(SoundType.journeyNotification);
     HapticFeedback.lightImpact();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -638,8 +647,8 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
 
   void _onImHerePressed() {
     BubuDuduService.instance.duduReady();
-    BubuDuduService.instance.duduMovedLeft(); // Auto-set duduMovedLeft
-    // SoundService.instance.playSound(SoundType.journeyNotification);
+    BubuDuduService.instance.duduMovedLeft();
+    SoundService.instance.playJourneySound(SoundType.journeyImhere);
     HapticFeedback.mediumImpact();
   }
 
