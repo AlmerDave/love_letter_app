@@ -172,6 +172,13 @@ class SoundService {
     await _musicPlayer.setVolume(volume.clamp(0.0, 1.0));
   }
 
+  Future<void> resetJourneySounds() async {
+    _stopTimer?.cancel();
+    await _sfxPlayer.stop();
+    await _sfxPlayer.release();
+    // Player will auto-reinitialize on next play() call with audioplayers
+  }
+
   void dispose() {
     _stopTimer?.cancel();
     _sfxPlayer.dispose();

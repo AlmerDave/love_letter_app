@@ -141,9 +141,9 @@ class _MainNavigationState extends State<MainNavigation> {
             label: 'Where are you?',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.favorite_rounded),  // Changed from grid to heart
-            activeIcon: Icon(Icons.favorite),
-            label: 'Journey',  // Changed from 'More' to 'Journey'
+            icon: Icon(Icons.pets),
+            activeIcon: Icon(Icons.pets),
+            label: 'Bubu&Dudu',
           ),
         ],
       ),

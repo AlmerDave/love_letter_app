@@ -295,6 +295,7 @@ class _BubuDuduJourneyScreenState extends State<BubuDuduJourneyScreen>
 
   Future<void> _handleManualReset() async {
     _stopAllTimers();
+    SoundService.instance.resetJourneySounds();
     SoundService.instance.stopJourneySound();
     SoundService.instance.stopBackgroundMusic();
     await BubuDuduService.instance.resetSession();
