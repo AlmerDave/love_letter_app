@@ -24,6 +24,7 @@ You can use whichever format is easiest for you.
 
 **✅ Copy this exact example to test:**
 ```
+ID: my-unique-date-2025
 Title: Test Love Letter 💕
 Message: This is a test message. If you can read this, scanning works!
 Location: Our favorite place

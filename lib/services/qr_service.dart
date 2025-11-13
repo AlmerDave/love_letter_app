@@ -100,6 +100,13 @@ class QRService {
     try {
       Map<String, String> fields = {};
       
+      // Extract ID
+      fields['id'] = _extractWithRegex(qrData, [
+        r'id[:\s]+([^\n]+)',
+        r'identifier[:\s]+([^\n]+)',
+        r'code[:\s]+([^\n]+)',
+      ]) ?? '';
+      
       // Extract title
       fields['title'] = _extractWithRegex(qrData, [
         r'title[:\s]+([^\n]+)',
@@ -174,6 +181,9 @@ class QRService {
     
     // Map alternative key names to standard ones
     const keyMap = {
+      'identifier': 'id',
+      'code': 'id',
+      'uniqueid': 'id',
       'subject': 'title',
       'event': 'title',
       'heading': 'title',
@@ -206,8 +216,13 @@ class QRService {
 
   // Helper: Build invitation from extracted fields
   Invitation _buildInvitationFromFields(Map<String, String> fields) {
+    // If ID is provided, use it; otherwise generate one
+    final id = (fields['id']?.isNotEmpty == true) 
+        ? fields['id']! 
+        : _uuid.v4();
+    
     return Invitation(
-      id: fields['id'] ?? _uuid.v4(),
+      id: id,
       
       title: fields['title']?.isNotEmpty == true 
           ? fields['title']! 
