@@ -27,7 +27,19 @@ jobs:
       run: flutter pub get
     
     - name: Build web
-      run: flutter build web --base-href "/${{ github.event.repository.name }}/"
+      run: flutter build web --release  # ✅ Removed --base-href
+    
+    # ✅ NEW: Copy service worker to correct location
+    - name: Ensure service worker is in root
+      run: |
+        echo "Checking if firebase-messaging-sw.js exists..."
+        ls -la build/web/
+        if [ -f "build/web/firebase-messaging-sw.js" ]; then
+          echo "✅ Service worker found"
+        else
+          echo "❌ Service worker NOT found - copying from web/"
+          cp web/firebase-messaging-sw.js build/web/
+        fi
     
     - name: Setup Pages
       uses: actions/configure-pages@v4
