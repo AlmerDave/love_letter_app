@@ -1,3 +1,4 @@
+// lib/screens/location_map_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -15,24 +16,84 @@ class LocationMapScreen extends StatefulWidget {
   State<LocationMapScreen> createState() => _LocationMapScreenState();
 }
 
-class _LocationMapScreenState extends State<LocationMapScreen> {
+class _LocationMapScreenState extends State<LocationMapScreen> with SingleTickerProviderStateMixin {
   final MapController _mapController = MapController();
   List<Marker> _markers = [];
   List<Polyline> _polylines = [];
   String? _currentUserId;
   bool _isSharing = true;
+  bool _isInitialLoading = true; // ✨ NEW: Track initial loading
+  bool _isRefreshing = false; // ✨ NEW: Track manual refresh
   StreamSubscription? _locationsSubscription;
+  Timer? _locationUpdateTimer;
   double? _distanceInMeters;
+  int _peopleOnline = 0; // ✨ NEW: Track actual people count (not kiss emojis)
+  DateTime? _lastUpdateTime; // ✨ NEW: Track last update time
+  
+  // ✨ NEW: Animation controller for pulse effect
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
-    _initializeMap();
+    _initializePulseAnimation();
+    _initializeMapWithLoading();
   }
 
-  Future<void> _initializeMap() async {
-    _currentUserId = await UserService.getUserId();
-    _listenToLocations();
+  void _initializePulseAnimation() {
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.3).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+  }
+
+  /// ✨ NEW: Initialize with loading screen
+  Future<void> _initializeMapWithLoading() async {
+    try {
+      _currentUserId = await UserService.getUserId();
+      
+      // Get initial location immediately
+      await _updateMyLocation(silent: true, isInitial: true);
+      
+      // Start listening to Firebase
+      _listenToLocations();
+      
+      // Start periodic updates
+      _startLocationUpdates();
+      
+      // Wait a bit for Firebase to sync
+      await Future.delayed(const Duration(milliseconds: 800));
+      
+      if (mounted) {
+        setState(() {
+          _isInitialLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error initializing map: $e');
+      if (mounted) {
+        setState(() {
+          _isInitialLoading = false;
+        });
+        _showErrorMessage('Failed to initialize map: $e');
+      }
+    }
+  }
+
+  /// ✨ UPDATED: Periodically update location every 10 seconds while screen is active
+  void _startLocationUpdates() {
+    _locationUpdateTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (timer) async {
+        if (_isSharing && mounted && !_isInitialLoading) {
+          await _updateMyLocation(silent: true);
+        }
+      },
+    );
   }
 
   void _listenToLocations() {
@@ -50,6 +111,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
     List<Marker> newMarkers = [];
     List<LatLng> positions = [];
     List<Polyline> newPolylines = [];
+    int peopleCount = 0; // ✨ NEW: Count actual people, not markers
 
     locationsData.forEach((userId, userData) {
       final userMap = Map<String, dynamic>.from(userData);
@@ -61,6 +123,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
         final position = LatLng(lat, lng);
 
         positions.add(position);
+        peopleCount++; // ✨ Increment people count
 
         // Choose color based on if it's current user
         final isCurrentUser = userId == _currentUserId;
@@ -77,26 +140,19 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
               },
               child: Column(
                 children: [
-                  // Cute pin with heart
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: markerColor,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: markerColor.withOpacity(0.5),
-                          blurRadius: 8,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.favorite,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
+                  // Cute pin with heart + pulse animation for current user
+                  isCurrentUser
+                      ? AnimatedBuilder(
+                          animation: _pulseAnimation,
+                          builder: (context, child) {
+                            return Transform.scale(
+                              scale: _pulseAnimation.value,
+                              child: child,
+                            );
+                          },
+                          child: _buildMarkerPin(markerColor),
+                        )
+                      : _buildMarkerPin(markerColor),
                   // Nickname below pin
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -127,7 +183,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
     if (positions.length == 2) {
       _distanceInMeters = _calculateDistance(positions[0], positions[1]);
       
-      // Many kiss emojis densely packed - always 20-30 kisses regardless of distance
+      // Many kiss emojis densely packed - always 30 kisses
       final numberOfKisses = 30;
       
       for (int i = 1; i < numberOfKisses; i++) {
@@ -154,12 +210,35 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
     setState(() {
       _markers = newMarkers;
       _polylines = newPolylines;
+      _peopleOnline = peopleCount; // ✨ NEW: Store people count
     });
 
     // Center map to show all markers
     if (positions.isNotEmpty) {
       _centerMapOnMarkers(positions);
     }
+  }
+
+  Widget _buildMarkerPin(Color markerColor) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: markerColor,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: markerColor.withOpacity(0.5),
+            blurRadius: 8,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: const Icon(
+        Icons.favorite,
+        color: Colors.white,
+        size: 24,
+      ),
+    );
   }
 
   // Calculate distance between two points in meters
@@ -215,9 +294,19 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
   void _showMarkerInfo(String nickname, bool isYou) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          isYou ? '📍 You are here!' : '💕 $nickname is here!',
-          style: const TextStyle(fontSize: 16),
+        content: Row(
+          children: [
+            Icon(
+              isYou ? Icons.person : Icons.favorite,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              isYou ? '📍 You are here!' : '💕 $nickname is here!',
+              style: const TextStyle(fontSize: 16),
+            ),
+          ],
         ),
         backgroundColor: isYou ? Colors.pink.shade400 : Colors.purple.shade400,
         behavior: SnackBarBehavior.floating,
@@ -227,61 +316,202 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
     );
   }
 
-  Future<void> _refreshMyLocation() async {
+  /// ✨ UPDATED: Better UX with loading state and feedback
+  Future<void> _updateMyLocation({bool silent = false, bool isInitial = false}) async {
+    if (!silent) {
+      setState(() {
+        _isRefreshing = true;
+      });
+    }
+
     try {
       final position = await LocationService.getCurrentLocation();
       if (position == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to get location')),
-          );
+        if (!silent && mounted) {
+          _showErrorMessage('Failed to get location');
         }
         return;
       }
 
-      final nickname = await UserService.getNickname();
-      
       await FirebaseService.instance.locationsRef
           .child(_currentUserId!)
           .update({
         'lat': position.latitude,
         'lng': position.longitude,
+        'isSharing': true,
         'lastUpdated': ServerValue.timestamp,
       });
 
-      if (mounted) {
+      // Update last update time
+      setState(() {
+        _lastUpdateTime = DateTime.now();
+      });
+
+      // ✨ Trigger pulse animation on successful update
+      if (!isInitial) {
+        _pulseController.forward().then((_) => _pulseController.reverse());
+      }
+
+      if (!silent && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('📍 Location updated!'),
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                const Text('📍 Location updated!'),
+              ],
+            ),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
     } catch (e) {
-      print('Error refreshing location: $e');
+      print('Error updating location: $e');
+      if (!silent && mounted) {
+        _showErrorMessage('Error: $e');
+      }
+    } finally {
+      if (!silent && mounted) {
+        setState(() {
+          _isRefreshing = false;
+        });
+      }
+    }
+  }
+
+  /// ✨ CRITICAL: Stop sharing when user leaves the screen
+  Future<void> _stopSharing() async {
+    if (_currentUserId == null) return;
+
+    try {
+      await FirebaseService.instance.locationsRef
+          .child(_currentUserId!)
+          .update({'isSharing': false});
+      
+      print('🛑 Stopped sharing location for user: $_currentUserId');
+    } catch (e) {
+      print('Error stopping location sharing: $e');
+    }
+  }
+
+  void _showErrorMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.white, size: 20),
+            const SizedBox(width: 8),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: Colors.red.shade400,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  /// ✨ NEW: Format last update time
+  String _getLastUpdateText() {
+    if (_lastUpdateTime == null) return 'Just now';
+    
+    final difference = DateTime.now().difference(_lastUpdateTime!);
+    
+    if (difference.inSeconds < 60) {
+      return '${difference.inSeconds}s ago';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return '${difference.inHours}h ago';
     }
   }
 
   @override
   void dispose() {
+    // Cancel all subscriptions and timers
     _locationsSubscription?.cancel();
+    _locationUpdateTimer?.cancel();
+    _pulseController.dispose();
     
-    // Stop sharing when leaving screen
-    if (_currentUserId != null) {
-      FirebaseService.instance.locationsRef
-          .child(_currentUserId!)
-          .update({'isSharing': false});
-    }
+    // ✨ CRITICAL: Stop sharing location when leaving screen (fire and forget)
+    _stopSharing();
     
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // ✨ NEW: Show loading screen on initial load
+    if (_isInitialLoading) {
+      return Scaffold(
+        backgroundColor: AppTheme.warmCream,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Animated heart
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.8, end: 1.2),
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.easeInOut,
+                builder: (context, scale, child) {
+                  return Transform.scale(
+                    scale: scale,
+                    child: Icon(
+                      Icons.favorite,
+                      size: 80,
+                      color: AppTheme.deepPurple,
+                    ),
+                  );
+                },
+                onEnd: () {
+                  // Loop animation
+                  if (mounted && _isInitialLoading) {
+                    setState(() {});
+                  }
+                },
+              ),
+              const SizedBox(height: 32),
+              CircularProgressIndicator(
+                color: AppTheme.deepPurple,
+                strokeWidth: 3,
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Finding your location... 💕',
+                style: AppTheme.romanticTitle.copyWith(
+                  fontSize: 18,
+                  color: AppTheme.deepPurple,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Please wait',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: AppTheme.deepPurple),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
         title: Text(
           'Where Are You? 💕',
           style: AppTheme.romanticTitle.copyWith(fontSize: 20),
@@ -289,6 +519,51 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
         centerTitle: true,
         backgroundColor: AppTheme.primaryLavender.withOpacity(0.3),
         elevation: 0,
+        actions: [
+          // Stop sharing button
+          IconButton(
+            icon: Icon(
+              _isSharing ? Icons.visibility : Icons.visibility_off,
+              color: _isSharing ? AppTheme.deepPurple : Colors.grey,
+            ),
+            onPressed: () async {
+              setState(() {
+                _isSharing = !_isSharing;
+              });
+              
+              if (_isSharing) {
+                await _updateMyLocation();
+              } else {
+                await _stopSharing();
+              }
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      Icon(
+                        _isSharing ? Icons.visibility : Icons.visibility_off,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _isSharing 
+                            ? '👀 Location sharing enabled' 
+                            : '🙈 Location sharing disabled',
+                      ),
+                    ],
+                  ),
+                  backgroundColor: _isSharing ? Colors.green : Colors.grey,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -328,7 +603,7 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
             ],
           ),
           
-          // People count indicator
+          // ✨ UPDATED: People count indicator with correct count
           Positioned(
             top: 16,
             left: 16,
@@ -350,9 +625,9 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
                   Icon(Icons.favorite, color: Colors.pink.shade400, size: 16),
                   const SizedBox(width: 6),
                   Text(
-                    _markers.length == 2 
+                    _peopleOnline >= 2 
                       ? 'Both online 💕'
-                      : 'Only you 💕',
+                      : 'Only you 😭',
                     style: TextStyle(
                       color: Colors.grey.shade700,
                       fontSize: 12,
@@ -412,19 +687,52 @@ class _LocationMapScreenState extends State<LocationMapScreen> {
               ),
             ),
           
-          // Refresh location button
+          // ✨ UPDATED: Refresh location button with loading state
           Positioned(
-            bottom: 100,
+            bottom: 100, // ✨ Fixed: Moved up to avoid bottom nav
             right: 24,
-            child: FloatingActionButton(
-              heroTag: 'refresh',
-              onPressed: _refreshMyLocation,
-              backgroundColor: Colors.white,
-              elevation: 4,
-              child: Icon(
-                Icons.my_location,
-                color: AppTheme.deepPurple,
-              ),
+            child: Column(
+              children: [
+                // Last update timestamp
+                if (_lastUpdateTime != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      _getLastUpdateText(),
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                // Refresh button with loading state
+                FloatingActionButton(
+                  heroTag: 'refresh',
+                  onPressed: _isRefreshing ? null : () => _updateMyLocation(),
+                  backgroundColor: _isRefreshing 
+                      ? Colors.grey.shade300 
+                      : Colors.white,
+                  elevation: 4,
+                  child: _isRefreshing
+                      ? SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: AppTheme.deepPurple,
+                            strokeWidth: 3,
+                          ),
+                        )
+                      : Icon(
+                          Icons.my_location,
+                          color: AppTheme.deepPurple,
+                        ),
+                ),
+              ],
             ),
           ),
         ],

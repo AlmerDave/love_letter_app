@@ -1,16 +1,12 @@
 // lib/screens/main_navigation.dart
 import 'package:flutter/material.dart';
 import 'package:love_letter_app/screens/main_screen.dart';
-import 'package:love_letter_app/screens/location_map_screen.dart';
+import 'package:love_letter_app/screens/more_screen.dart';
 import 'package:love_letter_app/screens/qr_scanner_screen.dart';
 import 'package:love_letter_app/screens/bubu_dudu_journey_screen.dart';
 import 'package:love_letter_app/utils/theme.dart';
-import 'package:love_letter_app/services/firebase_service.dart';
-import 'package:love_letter_app/services/location_service.dart';
 import 'package:love_letter_app/services/user_service.dart';
 import 'package:love_letter_app/services/sound_service.dart';
-import 'package:firebase_database/firebase_database.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({Key? key}) : super(key: key);
@@ -21,7 +17,6 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
-  bool _isHandlingLocationTap = false;
   bool _isCheckingNickname = true;
   bool _hasNickname = false;
 
@@ -51,7 +46,7 @@ class _MainNavigationState extends State<MainNavigation> {
   // Screens for each tab
   final List<Widget> _screens = [
     const MainScreen(),
-    const LocationMapScreenWrapper(), // Wrapper to handle navigation logic
+    const MoreScreen(), // ✨ Changed from LocationMapScreenWrapper to MoreScreen
     const BubuDuduJourneyScreen(),
   ];
 
@@ -103,21 +98,8 @@ class _MainNavigationState extends State<MainNavigation> {
       ),
       child: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) async {
-          // Only handle if switching TO location tab (not already on it) and not already processing
-          if (index == 1 && _currentIndex != 1 && !_isHandlingLocationTap) {
-            _isHandlingLocationTap = true;
-            final success = await _handleLocationTabTap();
-            _isHandlingLocationTap = false;
-            
-            if (!success) {
-              setState(() {
-                _currentIndex = 0;
-              });
-              return;
-            }
-          }
-          
+        onTap: (index) {
+          // Simple tab switching - no special handling needed
           setState(() {
             _currentIndex = index;
           });
@@ -136,9 +118,9 @@ class _MainNavigationState extends State<MainNavigation> {
             label: 'Letters',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.location_on_outlined),
-            activeIcon: Icon(Icons.location_on),
-            label: 'Where are you?',
+            icon: Icon(Icons.grid_view_rounded), // ✨ Changed icon
+            activeIcon: Icon(Icons.grid_view), // ✨ Changed icon
+            label: 'More', // ✨ Changed label
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.pets),
@@ -176,75 +158,6 @@ class _MainNavigationState extends State<MainNavigation> {
       if (_currentIndex == 0) {
         setState(() {}); // Trigger rebuild to refresh EnhancedMainScreen
       }
-    }
-  }
-
-  Future<bool> _handleLocationTabTap() async {
-    try {
-      // Get nickname (we know it exists because we checked on startup)
-      final nickname = await UserService.getNickname();
-      if (nickname == null || nickname.isEmpty) {
-        _showErrorMessage('Nickname not found. Please restart app.');
-        return false;
-      }
-
-      // Step 2: Get current location
-      final position = await LocationService.getCurrentLocation();
-      if (position == null) {
-        _showErrorMessage('Location permission denied 📍');
-        return false;
-      }
-
-      // Step 3: Convert nickname to lowercase for comparison
-      final lowercaseNickname = nickname!.trim().toLowerCase();
-
-      // Step 4: Check if nickname exists in Firebase
-      final snapshot = await FirebaseService.instance.locationsRef
-          .orderByChild('nickname')
-          .equalTo(lowercaseNickname)
-          .once();
-
-      if (snapshot.snapshot.value != null) {
-        // Step 5A: Nickname EXISTS - Update existing entry
-        final data = Map<String, dynamic>.from(snapshot.snapshot.value as Map);
-        final existingUserId = data.keys.first;
-        
-        await FirebaseService.instance.locationsRef
-            .child(existingUserId)
-            .update({
-          'lat': position.latitude,
-          'lng': position.longitude,
-          'isSharing': true,
-          'lastUpdated': ServerValue.timestamp,
-        });
-
-        // Store this userId locally
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user_device_id', existingUserId);
-        
-        print('🔄 Updated existing location for nickname: $lowercaseNickname');
-        
-      } else {
-        // Step 5B: Nickname DOES NOT exist - Create new entry
-        final userId = await UserService.getUserId();
-        
-        await FirebaseService.instance.locationsRef.child(userId).set({
-          'userId': userId,
-          'nickname': lowercaseNickname,
-          'lat': position.latitude,
-          'lng': position.longitude,
-          'isSharing': true,
-          'lastUpdated': ServerValue.timestamp,
-        });
-        
-        print('✨ Created new location entry for nickname: $lowercaseNickname');
-      }
-
-      return true; // Success, allow tab switch
-      
-    } catch (e) {
-      _showErrorMessage('Failed to share location: $e');
-      return false;
     }
   }
 
@@ -340,17 +253,6 @@ class _MainNavigationState extends State<MainNavigation> {
     );
   }
 
-  void _showErrorMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red.shade400,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
-
   void _showSuccessMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -360,15 +262,5 @@ class _MainNavigationState extends State<MainNavigation> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
-  }
-}
-
-// Wrapper for LocationMapScreen to remove its own app bar
-class LocationMapScreenWrapper extends StatelessWidget {
-  const LocationMapScreenWrapper({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return const LocationMapScreen();
   }
 }

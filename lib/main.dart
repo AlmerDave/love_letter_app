@@ -1,7 +1,9 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:love_letter_app/services/storage_service.dart';
 import 'package:love_letter_app/services/sample_data_service.dart';
+import 'package:love_letter_app/services/notification_service_web.dart'; // ✨ Web notifications
 import 'package:love_letter_app/screens/entrance_screen.dart';
 import 'package:love_letter_app/utils/theme.dart';
 import 'package:love_letter_app/services/firebase_service.dart';
@@ -13,8 +15,14 @@ void main() async {
     // Initialize Firebase
     await FirebaseService.instance.initialize();
     print('✅ Firebase initialized successfully!');
+    
+    // ✨ Initialize web push notifications
+    if (kIsWeb) {
+      await NotificationServiceWeb.instance.initialize();
+      print('✅ Web notifications initialized!');
+    }
   } catch (e) {
-    print('❌ Firebase initialization error: $e');
+    print('❌ Initialization error: $e');
   }
  
   // Initialize storage service
@@ -34,7 +42,7 @@ class LoveLettersApp extends StatelessWidget {
     return MaterialApp(
       title: 'Love Letters',
       theme: AppTheme.lightTheme,
-      home: const EntranceScreen(), // EntranceScreen should navigate to MainNavigation
+      home: const EntranceScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
