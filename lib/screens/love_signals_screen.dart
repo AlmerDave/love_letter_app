@@ -101,9 +101,9 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
         return;
       }
 
-      _addDebugLog('Calling requestPermission...');
-      final success = await NotificationServiceWeb.instance.requestPermission();
-      _addDebugLog('requestPermission result: $success');
+      _addDebugLog('Calling forceRefreshToken...');
+      final success = await NotificationServiceWeb.instance.forceRefreshToken();
+      _addDebugLog('forceRefreshToken result: $success');
       
       final token = NotificationServiceWeb.instance.fcmToken;
       _addDebugLog('Token: ${token?.substring(0, 20) ?? "null"}...');

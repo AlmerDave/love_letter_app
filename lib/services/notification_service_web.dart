@@ -288,4 +288,26 @@ class NotificationServiceWeb {
   Future<bool> areNotificationsEnabled() async {
     return await hasPermission();
   }
+
+  /// Force refresh token (for debug/switching devices)
+  Future<bool> forceRefreshToken() async {
+    try {
+      print('🔄 Force refreshing token...');
+      
+      final hasPermission = await this.hasPermission();
+      if (!hasPermission) {
+        print('❌ No permission - cannot refresh');
+        return false;
+      }
+
+      // Directly get and save token (don't call requestPermission)
+      await _obtainAndSaveToken();
+      
+      return _fcmToken != null;
+      
+    } catch (e) {
+      print('❌ Error force refreshing: $e');
+      return false;
+    }
+  }
 }
