@@ -82,7 +82,7 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function() {
         // Register the service worker for push notifications
-        navigator.serviceWorker.register('/firebase-messaging-sw.js')
+        navigator.serviceWorker.register('./firebase-messaging-sw.js')
           .then((registration) => {
             console.log('✅ Service Worker registered:', registration);
           })
