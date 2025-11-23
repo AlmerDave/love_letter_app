@@ -4,6 +4,8 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:love_letter_app/services/firebase_service.dart';
 import 'package:love_letter_app/services/user_service.dart';
 import 'package:love_letter_app/services/love_signals_service.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class NotificationServiceWeb {
   static NotificationServiceWeb? _instance;
@@ -24,6 +26,13 @@ class NotificationServiceWeb {
 
     try {
       print('🌐 Initializing Web Push Notifications (passive mode)...');
+
+      // ✨ NEW: Check if permission already granted, if yes get token
+      final hasPermission = await this.hasPermission();
+      if (hasPermission) {
+        print('🔔 Permission already granted, refreshing token...');
+        await _obtainAndSaveToken();
+      }
 
       // Listen for foreground messages (when app is open)
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
@@ -197,30 +206,30 @@ class NotificationServiceWeb {
         return false;
       }
 
-      final partnerToken = await _getPartnerFCMToken(partnerNickname);
-      if (partnerToken == null) {
-        print('❌ Partner FCM token not found');
-        return false;
-      }
-
       final isThinking = signalType == SignalType.thinkingOfYou;
-      final title = 'Love Letters 💕';
-      final body = isThinking
-          ? '$senderNickname is thinking of you right now 💭✨'
-          : '$senderNickname sent you a warm hug! 🤗💕';
-      
       final signalTypeStr = isThinking ? 'thinkingOfYou' : 'virtualHug';
 
-      print('📤 Would send notification:');
-      print('   To: $partnerNickname');
-      print('   Token: $partnerToken');
-      print('   Title: $title');
-      print('   Body: $body');
-      print('   Type: $signalTypeStr');
+      // Call Cloud Function
+      final url = 'https://sendlovesignal-fpg5ddtutq-uc.a.run.app';
       
-      // TODO: Implement actual sending via Cloud Functions
-      
-      return true;
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'partnerNickname': partnerNickname,
+          'senderNickname': senderNickname,
+          'signalType': signalTypeStr,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print('✅ Notification sent successfully: ${data['messageId']}');
+        return true;
+      } else {
+        print('❌ Failed to send notification: ${response.body}');
+        return false;
+      }
 
     } catch (e) {
       print('❌ Error sending web notification: $e');
