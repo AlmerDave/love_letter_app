@@ -108,25 +108,41 @@ class NotificationServiceWeb {
         provisional: false,
       );
 
+      print('📋 Permission status: ${settings.authorizationStatus}');
+
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
         print('✅ Notification permission granted');
         
         // Get FCM token
         await _obtainAndSaveToken();
-        return true;
+        
+        if (_fcmToken != null) {
+          print('✅ Token obtained and saved successfully');
+          return true;
+        } else {
+          print('❌ Permission granted but token is null');
+          return false;
+        }
         
       } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
         print('⚠️ Notification permission provisional');
         await _obtainAndSaveToken();
-        return true;
+        
+        if (_fcmToken != null) {
+          return true;
+        } else {
+          print('❌ Provisional permission but token is null');
+          return false;
+        }
         
       } else {
-        print('❌ Notification permission denied');
+        print('❌ Notification permission denied: ${settings.authorizationStatus}');
         return false;
       }
 
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ Error requesting permission: $e');
+      print('Stack trace: $stackTrace');
       return false;
     }
   }
@@ -134,6 +150,8 @@ class NotificationServiceWeb {
   /// Get FCM token and save to Firebase
   Future<void> _obtainAndSaveToken() async {
     try {
+      print('🔑 Obtaining FCM token...');
+      
       // Get FCM token with VAPID key
       _fcmToken = await _firebaseMessaging.getToken(
         vapidKey: 'BGaO7X_Mt1ZG2LRZ0ywNYkKHlGunUvgNdUnu2ZEh5638UktU7uTnu5AJmvFr_pEr8dUVjxpn8zLs_OEI08d1y3k',
@@ -142,11 +160,13 @@ class NotificationServiceWeb {
       if (_fcmToken != null) {
         print('📱 Web FCM Token obtained: $_fcmToken');
         await _saveTokenToFirebase(_fcmToken!);
+        print('✅ Token saved to Firebase successfully');
       } else {
-        print('❌ Failed to get FCM token');
+        print('❌ Failed to get FCM token - token is null');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ Error obtaining FCM token: $e');
+      print('Stack trace: $stackTrace');
     }
   }
 

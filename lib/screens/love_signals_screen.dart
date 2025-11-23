@@ -44,6 +44,10 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
   String _notificationPermission = 'checking'; // 'checking', 'granted', 'denied', 'default'
   bool _showNotificationBanner = false;
 
+  // ✨ NEW: Debug logs
+  List<String> _debugLogs = [];
+  bool _showDebugConsole = false;
+
   @override
   void initState() {
     super.initState();
@@ -73,27 +77,48 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
     });
   }
 
+  void _addDebugLog(String message) {
+    setState(() {
+      _debugLogs.insert(0, '${DateTime.now().toString().substring(11, 19)} - $message');
+      if (_debugLogs.length > 50) {
+        _debugLogs.removeLast();
+      }
+    });
+    print(message); // Also print to console
+  }
+
   // Add this method to _LoveSignalsScreenState
   Future<void> _forceTokenRefresh() async {
-    print('🔄 Forcing token refresh...');
+    _addDebugLog('🔄 Starting token refresh...');
     
-    final hasPermission = await NotificationServiceWeb.instance.hasPermission();
-    
-    if (!hasPermission) {
-      _showErrorMessage('Please enable notifications first');
-      return;
-    }
+    try {
+      final hasPermission = await NotificationServiceWeb.instance.hasPermission();
+      _addDebugLog('Permission status: $hasPermission');
+      
+      if (!hasPermission) {
+        _addDebugLog('❌ No permission granted');
+        _showErrorMessage('Please enable notifications first');
+        return;
+      }
 
-    // ✅ FIXED: Call requestPermission instead of initialize
-    // This will get a new token and save it
-    final success = await NotificationServiceWeb.instance.requestPermission();
-    
-    final token = NotificationServiceWeb.instance.fcmToken;
-    if (success && token != null) {
-      _showSuccessMessage('✅ Token refreshed!\n${token.substring(0, 30)}...');
-      print('📱 New token: $token');
-    } else {
-      _showErrorMessage('❌ Failed to refresh token');
+      _addDebugLog('Calling requestPermission...');
+      final success = await NotificationServiceWeb.instance.requestPermission();
+      _addDebugLog('requestPermission result: $success');
+      
+      final token = NotificationServiceWeb.instance.fcmToken;
+      _addDebugLog('Token: ${token?.substring(0, 20) ?? "null"}...');
+      
+      if (success && token != null) {
+        _addDebugLog('✅ Token refreshed successfully');
+        _showSuccessMessage('✅ Token refreshed!\n${token.substring(0, 30)}...');
+      } else {
+        _addDebugLog('❌ Failed - success: $success, token: ${token != null}');
+        _showErrorMessage('❌ Failed to refresh token');
+      }
+    } catch (e, stackTrace) {
+      _addDebugLog('❌ ERROR: $e');
+      _addDebugLog('Stack: ${stackTrace.toString().substring(0, 100)}');
+      _showErrorMessage('❌ Error: $e');
     }
   }
 
@@ -322,6 +347,10 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
+                  // ✨ Debug Console (only on web)
+                  if (kIsWeb)
+                    _buildDebugConsole(),
+                  
                   // ✨ NEW: Notification permission banner
                   if (kIsWeb && _showNotificationBanner)
                     _buildNotificationBanner(),
@@ -394,6 +423,108 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
 
           // Heart burst animation overlay
           if (_showHeartBurst) _buildHeartBurstAnimation(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDebugConsole() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.black87,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green, width: 2),
+      ),
+      child: Column(
+        children: [
+          // Header
+          InkWell(
+            onTap: () {
+              setState(() => _showDebugConsole = !_showDebugConsole);
+            },
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.shade900,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(10),
+                  topRight: Radius.circular(10),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.bug_report, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Debug Console',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    _showDebugConsole ? Icons.expand_less : Icons.expand_more,
+                    color: Colors.white,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          // Logs
+          if (_showDebugConsole)
+            Container(
+              height: 200,
+              padding: const EdgeInsets.all(8),
+              child: _debugLogs.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No logs yet...',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: _debugLogs.length,
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Text(
+                            _debugLogs[index],
+                            style: TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              color: _debugLogs[index].contains('❌')
+                                  ? Colors.red.shade300
+                                  : _debugLogs[index].contains('✅')
+                                      ? Colors.green.shade300
+                                      : Colors.white,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          
+          // Clear button
+          if (_showDebugConsole)
+            Container(
+              padding: const EdgeInsets.all(8),
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  setState(() => _debugLogs.clear());
+                },
+                icon: const Icon(Icons.clear_all, size: 16),
+                label: const Text('Clear Logs'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade900,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  minimumSize: const Size(0, 0),
+                ),
+              ),
+            ),
         ],
       ),
     );
