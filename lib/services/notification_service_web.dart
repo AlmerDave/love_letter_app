@@ -18,12 +18,78 @@ class NotificationServiceWeb {
   bool _initialized = false;
   String? _fcmToken;
 
-  /// Initialize web push notifications
+  /// Initialize ONLY the listener (no auto-permission request)
   Future<void> initialize() async {
     if (_initialized) return;
 
     try {
-      print('🌐 Initializing Web Push Notifications...');
+      print('🌐 Initializing Web Push Notifications (passive mode)...');
+
+      // Listen for foreground messages (when app is open)
+      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
+
+      // Listen for token refresh (if user already granted permission)
+      _firebaseMessaging.onTokenRefresh.listen((newToken) {
+        print('🔄 Web FCM Token refreshed');
+        _fcmToken = newToken;
+        _saveTokenToFirebase(newToken);
+      });
+
+      _initialized = true;
+      print('✅ Web Push Notifications initialized (listening mode)');
+
+    } catch (e) {
+      print('❌ Error initializing web notifications: $e');
+    }
+  }
+
+  /// Check if browser supports notifications
+  Future<bool> isNotificationSupported() async {
+    try {
+      final settings = await _firebaseMessaging.getNotificationSettings();
+      return settings.authorizationStatus != AuthorizationStatus.notDetermined ||
+             settings.authorizationStatus == AuthorizationStatus.authorized;
+    } catch (e) {
+      print('❌ Notification support check failed: $e');
+      return false;
+    }
+  }
+
+  /// Get current permission status
+  /// Returns: 'granted', 'denied', 'default', 'unsupported'
+  Future<String> getPermissionStatus() async {
+    try {
+      final settings = await _firebaseMessaging.getNotificationSettings();
+      
+      switch (settings.authorizationStatus) {
+        case AuthorizationStatus.authorized:
+          return 'granted';
+        case AuthorizationStatus.denied:
+          return 'denied';
+        case AuthorizationStatus.notDetermined:
+          return 'default';
+        case AuthorizationStatus.provisional:
+          return 'provisional';
+        default:
+          return 'unsupported';
+      }
+    } catch (e) {
+      print('❌ Error checking permission status: $e');
+      return 'unsupported';
+    }
+  }
+
+  /// Check if permission is already granted
+  Future<bool> hasPermission() async {
+    final status = await getPermissionStatus();
+    return status == 'granted' || status == 'provisional';
+  }
+
+  /// Request notification permission from user
+  /// This is the method called when user clicks the button
+  Future<bool> requestPermission() async {
+    try {
+      print('🔔 Requesting notification permission...');
 
       // Request permission
       final settings = await _firebaseMessaging.requestPermission(
@@ -34,49 +100,52 @@ class NotificationServiceWeb {
       );
 
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        print('✅ Web notification permission granted');
+        print('✅ Notification permission granted');
+        
+        // Get FCM token
+        await _obtainAndSaveToken();
+        return true;
+        
       } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
-        print('⚠️ Web notification permission provisional');
+        print('⚠️ Notification permission provisional');
+        await _obtainAndSaveToken();
+        return true;
+        
       } else {
-        print('❌ Web notification permission denied');
-        return;
+        print('❌ Notification permission denied');
+        return false;
       }
 
-      // ✨ CRITICAL: Get FCM token with VAPID key (Web Push certificate)
-      // Replace with YOUR key from Firebase Console → Cloud Messaging → Web Push certificates
+    } catch (e) {
+      print('❌ Error requesting permission: $e');
+      return false;
+    }
+  }
+
+  /// Get FCM token and save to Firebase
+  Future<void> _obtainAndSaveToken() async {
+    try {
+      // Get FCM token with VAPID key
       _fcmToken = await _firebaseMessaging.getToken(
-        vapidKey: 'BGaO7X_Mt1ZG2LRZ0ywNYkKHlGunUvgNdUnu2ZEh5638UktU7uTnu5AJmvFr_pEr8dUVjxpn8zLs_OEI08d1y3k', // ← IMPORTANT: Replace this!
+        vapidKey: 'BGaO7X_Mt1ZG2LRZ0ywNYkKHlGunUvgNdUnu2ZEh5638UktU7uTnu5AJmvFr_pEr8dUVjxpn8zLs_OEI08d1y3k',
       );
 
       if (_fcmToken != null) {
         print('📱 Web FCM Token obtained: $_fcmToken');
-        await _saveFCMToken(_fcmToken!);
+        await _saveTokenToFirebase(_fcmToken!);
       } else {
         print('❌ Failed to get FCM token');
       }
-
-      // Listen for token refresh
-      _firebaseMessaging.onTokenRefresh.listen((newToken) {
-        print('🔄 Web FCM Token refreshed');
-        _fcmToken = newToken;
-        _saveFCMToken(newToken);
-      });
-
-      // Listen for foreground messages (when app is open)
-      FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
-
-      _initialized = true;
-      print('✅ Web Push Notifications initialized successfully');
-
     } catch (e) {
-      print('❌ Error initializing web notifications: $e');
+      print('❌ Error obtaining FCM token: $e');
     }
   }
 
-  /// Save FCM token to Firebase
-  Future<void> _saveFCMToken(String token) async {
+  /// Save FCM token to Firebase by nickname
+  /// Structure: /notification_tokens/{nickname}
+  /// Updates if exists, creates if new
+  Future<void> _saveTokenToFirebase(String token) async {
     try {
-      final userId = await UserService.getUserId();
       final nickname = await UserService.getNickname();
       
       if (nickname == null) {
@@ -84,17 +153,22 @@ class NotificationServiceWeb {
         return;
       }
 
+      final lowercaseNickname = nickname.toLowerCase();
+
+      // Save to /notification_tokens/{nickname}
       await FirebaseService.instance.database
-          .child('users')
-          .child(userId)
-          .update({
-        'fcmToken': token,
-        'nickname': nickname.toLowerCase(),
-        'platform': 'web', // ✨ Mark as web user
-        'lastTokenUpdate': ServerValue.timestamp,
+          .child('notification_tokens')
+          .child(lowercaseNickname)
+          .set({
+        'token': token,
+        'nickname': lowercaseNickname,
+        'platform': 'web',
+        'timestamp': ServerValue.timestamp,
+        'lastUpdated': ServerValue.timestamp,
       });
 
-      print('💾 Web FCM token saved to Firebase');
+      print('💾 Web FCM token saved for: $lowercaseNickname');
+      print('   Path: /notification_tokens/$lowercaseNickname');
     } catch (e) {
       print('❌ Error saving FCM token: $e');
     }
@@ -107,7 +181,6 @@ class NotificationServiceWeb {
     print('   Body: ${message.notification?.body}');
     
     // Browser will automatically show notification via service worker
-    // You can add custom handling here if needed
   }
 
   /// Send notification to partner
@@ -118,7 +191,6 @@ class NotificationServiceWeb {
     try {
       print('📤 Sending web notification...');
 
-      // Get partner's FCM token
       final partnerNickname = await LoveSignalsService.instance.getPartnerNickname();
       if (partnerNickname == null) {
         print('❌ No partner found');
@@ -131,7 +203,6 @@ class NotificationServiceWeb {
         return false;
       }
 
-      // Prepare notification data
       final isThinking = signalType == SignalType.thinkingOfYou;
       final title = 'Love Letters 💕';
       final body = isThinking
@@ -140,8 +211,6 @@ class NotificationServiceWeb {
       
       final signalTypeStr = isThinking ? 'thinkingOfYou' : 'virtualHug';
 
-      // ✨ IMPORTANT: For web, we need to send via HTTP API or Cloud Functions
-      // For now, we'll log what would be sent
       print('📤 Would send notification:');
       print('   To: $partnerNickname');
       print('   Token: $partnerToken');
@@ -149,8 +218,7 @@ class NotificationServiceWeb {
       print('   Body: $body');
       print('   Type: $signalTypeStr');
       
-      // TODO: Implement actual sending via Cloud Functions or HTTP API
-      // See instructions below in the setup guide
+      // TODO: Implement actual sending via Cloud Functions
       
       return true;
 
@@ -163,22 +231,22 @@ class NotificationServiceWeb {
   /// Get partner's FCM token from Firebase
   Future<String?> _getPartnerFCMToken(String partnerNickname) async {
     try {
+      final lowercaseNickname = partnerNickname.toLowerCase();
+      
       final snapshot = await FirebaseService.instance.database
-          .child('users')
-          .orderByChild('nickname')
-          .equalTo(partnerNickname.toLowerCase())
+          .child('notification_tokens')
+          .child(lowercaseNickname)
           .once();
 
       if (snapshot.snapshot.value == null) {
-        print('❌ Partner not found in Firebase');
+        print('❌ Partner token not found for: $lowercaseNickname');
         return null;
       }
 
       final data = Map<String, dynamic>.from(snapshot.snapshot.value as Map);
-      final userData = data.values.first as Map<String, dynamic>;
+      final token = data['token'] as String?;
       
-      final token = userData['fcmToken'] as String?;
-      print('✅ Found partner FCM token');
+      print('✅ Found partner FCM token for: $lowercaseNickname');
       return token;
     } catch (e) {
       print('❌ Error getting partner FCM token: $e');
@@ -186,12 +254,9 @@ class NotificationServiceWeb {
     }
   }
 
-  /// Get current FCM token
   String? get fcmToken => _fcmToken;
 
-  /// Check if notifications are enabled
   Future<bool> areNotificationsEnabled() async {
-    final settings = await _firebaseMessaging.getNotificationSettings();
-    return settings.authorizationStatus == AuthorizationStatus.authorized;
+    return await hasPermission();
   }
 }

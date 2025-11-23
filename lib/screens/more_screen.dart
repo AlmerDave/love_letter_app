@@ -74,7 +74,7 @@ class MoreScreen extends StatelessWidget {
               _FeatureCard(
                 imagePath: 'assets/images/bubu_dudu/calendar_feature.gif',
                 fallbackIcon: Icons.calendar_today,
-                title: 'Special\nDates',
+                title: 'Please\nWait',
                 subtitle: 'Coming soon 📅',
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
@@ -92,7 +92,7 @@ class MoreScreen extends StatelessWidget {
               _FeatureCard(
                 imagePath: 'assets/images/bubu_dudu/voice_feature.gif',
                 fallbackIcon: Icons.mic,
-                title: 'Voice\nMessages',
+                title: 'Please\nWait',
                 subtitle: 'Coming soon 🎤',
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,

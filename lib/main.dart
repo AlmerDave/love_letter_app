@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:love_letter_app/services/storage_service.dart';
 import 'package:love_letter_app/services/sample_data_service.dart';
-import 'package:love_letter_app/services/notification_service_web.dart'; // ✨ Web notifications
+import 'package:love_letter_app/services/notification_service_web.dart';
 import 'package:love_letter_app/screens/entrance_screen.dart';
 import 'package:love_letter_app/utils/theme.dart';
 import 'package:love_letter_app/services/firebase_service.dart';
@@ -16,10 +16,10 @@ void main() async {
     await FirebaseService.instance.initialize();
     print('✅ Firebase initialized successfully!');
     
-    // ✨ Initialize web push notifications
+    // ✨ Initialize web push notifications (passive mode - no auto-permission)
     if (kIsWeb) {
       await NotificationServiceWeb.instance.initialize();
-      print('✅ Web notifications initialized!');
+      print('✅ Web notifications initialized (listening mode)!');
     }
   } catch (e) {
     print('❌ Initialization error: $e');

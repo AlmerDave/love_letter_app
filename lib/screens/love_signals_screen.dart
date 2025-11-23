@@ -40,6 +40,10 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
   bool _showHeartBurst = false;
   String? _lastSignalSender;
 
+  // ✨ NEW: Notification permission state
+  String _notificationPermission = 'checking'; // 'checking', 'granted', 'denied', 'default'
+  bool _showNotificationBanner = false;
+
   @override
   void initState() {
     super.initState();
@@ -47,6 +51,7 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
     _startCooldownTimer();
     _listenToSignals();
     _initializeAnimations();
+    _checkNotificationPermission(); // ✨ NEW
   }
 
   void _initializeAnimations() {
@@ -66,6 +71,43 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
         _heartBurstController.reset();
       }
     });
+  }
+
+  // ✨ NEW: Check notification permission status
+  Future<void> _checkNotificationPermission() async {
+    if (!kIsWeb) {
+      setState(() => _showNotificationBanner = false);
+      return;
+    }
+
+    final status = await NotificationServiceWeb.instance.getPermissionStatus();
+    setState(() {
+      _notificationPermission = status;
+      _showNotificationBanner = (status == 'default' || status == 'denied');
+    });
+  }
+
+  // ✨ NEW: Request notification permission
+  Future<void> _requestNotificationPermission() async {
+    setState(() => _notificationPermission = 'requesting');
+
+    final granted = await NotificationServiceWeb.instance.requestPermission();
+
+    if (granted) {
+      setState(() {
+        _notificationPermission = 'granted';
+        _showNotificationBanner = false;
+      });
+      
+      _showSuccessMessage('🔔 Notifications enabled! You\'ll get love signals instantly!');
+    } else {
+      setState(() {
+        _notificationPermission = 'denied';
+        _showNotificationBanner = true;
+      });
+      
+      _showErrorMessage('❌ Permission denied. Enable in browser settings to receive notifications.');
+    }
   }
 
   Future<void> _loadData() async {
@@ -146,7 +188,6 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
   }
 
   void _showSendingDialog(SignalType type) {
-    // ✨ NEW: Using image paths
     final imagePath = type == SignalType.thinkingOfYou 
         ? 'assets/images/bubu_dudu/thinking_signal.gif'
         : 'assets/images/bubu_dudu/hug_signal.gif';
@@ -180,8 +221,7 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
     // Show beautiful sending dialog
     _showSendingDialog(type);
 
-    // ✨ ADD THIS LINE HERE - Makes loading last longer
-    await Future.delayed(const Duration(seconds: 2)); // ← ADD THIS!
+    await Future.delayed(const Duration(seconds: 2));
 
     // Get partner nickname
     final partnerNickname = await LoveSignalsService.instance.getPartnerNickname();
@@ -248,13 +288,23 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
         children: [
           // Main content
           RefreshIndicator(
-            onRefresh: _loadData,
+            onRefresh: () async {
+              await _loadData();
+              await _checkNotificationPermission();
+            },
             color: AppTheme.deepPurple,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
+                  // ✨ NEW: Notification permission banner
+                  if (kIsWeb && _showNotificationBanner)
+                    _buildNotificationBanner(),
+                  
+                  if (kIsWeb && _showNotificationBanner)
+                    const SizedBox(height: 16),
+
                   // Dashboard counters
                   _buildDashboard(),
                   const SizedBox(height: 24),
@@ -265,7 +315,7 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
                     imagePath: 'assets/images/bubu_dudu/thinking_icon.png',
                     emoji: '💭',
                     title: 'Sending Warm Thoughts',
-                    subtitle: 'A small reminder that\n you’re cared for',
+                    subtitle: "A small reminder that\n you're cared for",
                     cooldown: _thinkingCooldown,
                     gradient: LinearGradient(
                       colors: [
@@ -301,6 +351,115 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
 
           // Heart burst animation overlay
           if (_showHeartBurst) _buildHeartBurstAnimation(),
+        ],
+      ),
+    );
+  }
+
+  // ✨ NEW: Notification permission banner
+  Widget _buildNotificationBanner() {
+    final isDenied = _notificationPermission == 'denied';
+    final isRequesting = _notificationPermission == 'requesting';
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDenied 
+              ? [Colors.orange.shade300, Colors.orange.shade400]
+              : [AppTheme.primaryLavender, AppTheme.softBlush],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.mediumShadow,
+      ),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.9),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isDenied ? Icons.notifications_off : Icons.notifications_active,
+              color: isDenied ? Colors.orange : AppTheme.deepPurple,
+              size: 28,
+            ),
+          ),
+          
+          const SizedBox(width: 16),
+          
+          // Text
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isDenied 
+                      ? 'Notifications Blocked'
+                      : 'Enable Notifications',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isDenied
+                      ? 'Enable in browser settings'
+                      : 'Get instant love signals!',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.white.withOpacity(0.9),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Button
+          if (!isDenied)
+            TextButton(
+              onPressed: isRequesting ? null : _requestNotificationPermission,
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              child: isRequesting
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation(AppTheme.deepPurple),
+                      ),
+                    )
+                  : Text(
+                      'Enable',
+                      style: TextStyle(
+                        color: AppTheme.deepPurple,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+            ),
+          
+          // Close button
+          IconButton(
+            icon: const Icon(Icons.close, color: Colors.white, size: 20),
+            onPressed: () {
+              setState(() => _showNotificationBanner = false);
+            },
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
         ],
       ),
     );
@@ -368,7 +527,6 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
       ),
       child: Column(
         children: [
-          // ✨ NEW: Image with emoji fallback
           _buildImageOrEmoji(
             imagePath: imagePath,
             emoji: emoji,
@@ -464,7 +622,6 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
           ),
           child: Row(
             children: [
-              // ✨ NEW: Image circle with emoji fallback
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -533,7 +690,6 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
         ),
         child: Column(
           children: [
-            // ✨ NEW: Empty state with image
             _buildImageOrEmoji(
               imagePath: 'assets/images/bubu_dudu/no_signals.png',
               emoji: '💕',
@@ -584,10 +740,6 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
   }
 
   Widget _buildSignalItem(LoveSignal signal) {
-    final isFromMe = signal.senderNickname.toLowerCase() == 
-        (_lastSignalSender?.toLowerCase() ?? '').toLowerCase();
-    
-    // ✨ NEW: Get image path based on signal type
     final imagePath = signal.type == SignalType.thinkingOfYou
         ? 'assets/images/bubu_dudu/thinking_small.png'
         : 'assets/images/bubu_dudu/hug_small.png';
@@ -651,7 +803,6 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Burst hearts (you could replace these with PNG images too!)
                   Stack(
                     alignment: Alignment.center,
                     children: List.generate(12, (index) {
@@ -674,7 +825,6 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
                     }),
                   ),
                   const SizedBox(height: 40),
-                  // Message card
                   FadeTransition(
                     opacity: Tween<double>(begin: 0, end: 1).animate(
                       CurvedAnimation(
@@ -728,7 +878,6 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
     );
   }
 
-  // ✨ NEW: Helper method to show image with emoji fallback
   Widget _buildImageOrEmoji({
     String? imagePath,
     required String emoji,
@@ -741,7 +890,6 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
         height: size,
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) {
-          // Fallback to emoji if image not found
           return Text(
             emoji,
             style: TextStyle(fontSize: size * 0.7),
@@ -749,7 +897,6 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
         },
       );
     } else {
-      // Use emoji directly
       return Text(
         emoji,
         style: TextStyle(fontSize: size * 0.7),
@@ -809,7 +956,7 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
   }
 }
 
-// ✨ Beautiful Animated Sending Dialog (with image support!)
+// Sending Dialog (unchanged)
 class _SendingDialog extends StatefulWidget {
   final String? imagePath;
   final String emoji;
@@ -889,11 +1036,9 @@ class _SendingDialogState extends State<_SendingDialog>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Animated image/emoji with rotating hearts
               Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Rotating hearts around image
                   AnimatedBuilder(
                     animation: _rotationAnimation,
                     builder: (context, child) {
@@ -921,7 +1066,6 @@ class _SendingDialogState extends State<_SendingDialog>
                     },
                   ),
                   
-                  // Pulsing main image/emoji
                   AnimatedBuilder(
                     animation: _scaleAnimation,
                     builder: (context, child) {
@@ -952,7 +1096,6 @@ class _SendingDialogState extends State<_SendingDialog>
               
               const SizedBox(height: 24),
               
-              // Animated dots
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(3, (index) {
@@ -984,7 +1127,6 @@ class _SendingDialogState extends State<_SendingDialog>
               
               const SizedBox(height: 16),
               
-              // Message text
               Text(
                 widget.message,
                 style: TextStyle(
@@ -998,7 +1140,6 @@ class _SendingDialogState extends State<_SendingDialog>
               
               const SizedBox(height: 8),
               
-              // Subtitle
               Text(
                 'With all your love 💕',
                 style: TextStyle(
@@ -1015,7 +1156,6 @@ class _SendingDialogState extends State<_SendingDialog>
     );
   }
 
-  // ✨ Helper method for image with emoji fallback
   Widget _buildImageOrEmoji({
     String? imagePath,
     required String emoji,
