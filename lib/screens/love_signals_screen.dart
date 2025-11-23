@@ -73,6 +73,30 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
     });
   }
 
+  // Add this method to _LoveSignalsScreenState
+  Future<void> _forceTokenRefresh() async {
+    print('🔄 Forcing token refresh...');
+    
+    final hasPermission = await NotificationServiceWeb.instance.hasPermission();
+    
+    if (!hasPermission) {
+      _showErrorMessage('Please enable notifications first');
+      return;
+    }
+
+    // ✅ FIXED: Call requestPermission instead of initialize
+    // This will get a new token and save it
+    final success = await NotificationServiceWeb.instance.requestPermission();
+    
+    final token = NotificationServiceWeb.instance.fcmToken;
+    if (success && token != null) {
+      _showSuccessMessage('✅ Token refreshed!\n${token.substring(0, 30)}...');
+      print('📱 New token: $token');
+    } else {
+      _showErrorMessage('❌ Failed to refresh token');
+    }
+  }
+
   // ✨ NEW: Check notification permission status
   Future<void> _checkNotificationPermission() async {
     if (!kIsWeb) {
@@ -304,6 +328,25 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
                   
                   if (kIsWeb && _showNotificationBanner)
                     const SizedBox(height: 16),
+
+                  // 🔧 DEBUG: Force refresh token button
+                  if (kIsWeb)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: ElevatedButton.icon(
+                        onPressed: _forceTokenRefresh,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('🔄 Force Refresh Token (Debug)'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.deepPurple,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
 
                   // Dashboard counters
                   _buildDashboard(),
