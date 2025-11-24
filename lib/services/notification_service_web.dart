@@ -237,7 +237,6 @@ class NotificationServiceWeb {
     try {
       _log('🔑 Obtaining FCM token...');
       
-      // ✨ ENHANCED: Check permission before getting token
       final browserPerm = html.Notification.permission;
       _log('📱 Browser permission before getToken: $browserPerm');
       
@@ -245,7 +244,18 @@ class NotificationServiceWeb {
         _log('⚠️ WARNING: Browser permission not granted, getToken may fail');
       }
       
-      // Get FCM token with VAPID key
+      // ✅ Get the service worker registration first
+      final swRegistration = await html.window.navigator.serviceWorker?.getRegistration('/love_letter_app/');
+      
+      if (swRegistration == null) {
+        _log('❌ No service worker registration found');
+        return;
+      }
+      
+      _log('✅ Found service worker: ${swRegistration.scope}');
+      
+      // ✅ Get FCM token WITHOUT specifying vapidKey in getToken
+      // The service worker should handle the VAPID key
       _fcmToken = await _firebaseMessaging.getToken(
         vapidKey: 'BGaO7X_Mt1ZG2LRZ0ywNYkKHlGunUvgNdUnu2ZEh5638UktU7uTnu5AJmvFr_pEr8dUVjxpn8zLs_OEI08d1y3k',
       );
@@ -256,7 +266,6 @@ class NotificationServiceWeb {
         _log('✅ Token saved to Firebase successfully');
       } else {
         _log('❌ Failed to get FCM token - token is null');
-        _log('🔍 Browser permission: $browserPerm');
       }
     } catch (e, stackTrace) {
       _log('❌ Error obtaining FCM token: $e');
