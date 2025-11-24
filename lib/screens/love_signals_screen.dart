@@ -1,6 +1,7 @@
 // lib/screens/love_signals_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
 import 'package:love_letter_app/utils/theme.dart';
 import 'package:love_letter_app/services/love_signals_service.dart';
 import 'package:love_letter_app/services/notification_service_web.dart';
@@ -51,6 +52,12 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
   @override
   void initState() {
     super.initState();
+
+    // ✨ NEW: Connect debug logging
+    NotificationServiceWeb.instance.onDebugLog = (message) {
+      _addDebugLog(message);
+    };
+
     _loadData();
     _startCooldownTimer();
     _listenToSignals();
@@ -120,6 +127,39 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
       _addDebugLog('Stack: ${stackTrace.toString().substring(0, 100)}');
       _showErrorMessage('❌ Error: $e');
     }
+  }
+
+  // ✨ ENHANCED: Add detailed system info button
+  Future<void> _showSystemInfo() async {
+    _addDebugLog('📊 Getting system info...');
+    
+    final debugInfo = await NotificationServiceWeb.instance.getDebugInfo();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('🔍 System Information'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildInfoSection('Browser API', debugInfo['browser']),
+              const Divider(),
+              _buildInfoSection('Firebase SDK', debugInfo['firebase']),
+              const Divider(),
+              _buildInfoSection('Service State', debugInfo['service']),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ✨ NEW: Check notification permission status
@@ -316,6 +356,29 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
     }
   }
 
+  // ✨ NEW: Check permission status
+  Future<void> _checkPermissionStatus() async {
+    _addDebugLog('🔍 === CHECKING PERMISSION STATUS ===');
+    
+    try {
+      final browserStatus = await NotificationServiceWeb.instance.getBrowserPermissionStatus();
+      _addDebugLog('🌐 Browser: $browserStatus');
+      
+      final serviceStatus = await NotificationServiceWeb.instance.getPermissionStatus();
+      _addDebugLog('🔥 Service: $serviceStatus');
+      
+      final hasIt = await NotificationServiceWeb.instance.hasPermission();
+      _addDebugLog('✅ hasPermission(): $hasIt');
+      
+      _addDebugLog('🔍 === CHECK COMPLETE ===');
+      
+      _showSuccessMessage('Check complete! See logs above.');
+    } catch (e) {
+      _addDebugLog('❌ Check failed: $e');
+      _showErrorMessage('Check failed: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -428,6 +491,54 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
     );
   }
 
+  Widget _buildInfoSection(String title, Map<String, dynamic>? data) {
+    if (data == null) return const SizedBox();
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...data.entries.map((entry) {
+          return Padding(
+            padding: const EdgeInsets.only(left: 8, bottom: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    '${entry.key}:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: SelectableText(
+                    '${entry.value}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ],
+    );
+  }
+
+  // ✨ ENHANCED: Better debug console with more features
   Widget _buildDebugConsole() {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -463,6 +574,22 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade700,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${_debugLogs.length}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                   const Spacer(),
                   Icon(
                     _showDebugConsole ? Icons.expand_less : Icons.expand_more,
@@ -473,33 +600,81 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
             ),
           ),
           
+          // Quick actions (always visible)
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade900,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _buildQuickActionButton(
+                    icon: Icons.info_outline,
+                    label: 'System Info',
+                    onPressed: _showSystemInfo,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildQuickActionButton(
+                    icon: Icons.refresh,
+                    label: 'Force Token',
+                    onPressed: _forceTokenRefresh,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildQuickActionButton(
+                    icon: Icons.check_circle_outline,
+                    label: 'Check Perm',
+                    onPressed: _checkPermissionStatus,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
           // Logs
           if (_showDebugConsole)
             Container(
-              height: 200,
+              height: 250,
               padding: const EdgeInsets.all(8),
               child: _debugLogs.isEmpty
                   ? const Center(
                       child: Text(
-                        'No logs yet...',
+                        'No logs yet...\nUse the buttons above to test',
                         style: TextStyle(color: Colors.grey),
+                        textAlign: TextAlign.center,
                       ),
                     )
                   : ListView.builder(
                       itemCount: _debugLogs.length,
                       itemBuilder: (context, index) {
-                        return Padding(
+                        final log = _debugLogs[index];
+                        Color textColor = Colors.white;
+                        
+                        if (log.contains('❌') || log.contains('ERROR')) {
+                          textColor = Colors.red.shade300;
+                        } else if (log.contains('✅') || log.contains('SUCCESS')) {
+                          textColor = Colors.green.shade300;
+                        } else if (log.contains('⚠️') || log.contains('WARNING')) {
+                          textColor = Colors.orange.shade300;
+                        } else if (log.contains('📋') || log.contains('1️⃣') || 
+                                  log.contains('2️⃣') || log.contains('3️⃣') ||
+                                  log.contains('4️⃣') || log.contains('5️⃣')) {
+                          textColor = Colors.blue.shade300;
+                        }
+                        
+                        return Container(
                           padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Text(
-                            _debugLogs[index],
+                          child: SelectableText(
+                            log,
                             style: TextStyle(
                               fontFamily: 'monospace',
                               fontSize: 11,
-                              color: _debugLogs[index].contains('❌')
-                                  ? Colors.red.shade300
-                                  : _debugLogs[index].contains('✅')
-                                      ? Colors.green.shade300
-                                      : Colors.white,
+                              color: textColor,
+                              height: 1.3,
                             ),
                           ),
                         );
@@ -507,24 +682,98 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
                     ),
             ),
           
-          // Clear button
+          // Control buttons
           if (_showDebugConsole)
             Container(
               padding: const EdgeInsets.all(8),
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  setState(() => _debugLogs.clear());
-                },
-                icon: const Icon(Icons.clear_all, size: 16),
-                label: const Text('Clear Logs'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red.shade900,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  minimumSize: const Size(0, 0),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade900,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(10),
+                  bottomRight: Radius.circular(10),
                 ),
               ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() => _debugLogs.clear());
+                        _addDebugLog('🗑️ Logs cleared');
+                      },
+                      icon: const Icon(Icons.clear_all, size: 16),
+                      label: const Text('Clear'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red.shade900,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        minimumSize: const Size(0, 0),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final logs = _debugLogs.join('\n');
+                        await Clipboard.setData(ClipboardData(text: logs));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Logs copied to clipboard!'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy, size: 16),
+                      label: const Text('Copy'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade900,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        minimumSize: const Size(0, 0),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.grey.shade800,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        minimumSize: const Size(0, 0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );

@@ -6,6 +6,7 @@ import 'package:love_letter_app/services/user_service.dart';
 import 'package:love_letter_app/services/love_signals_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:html' as html; // ✨ NEW: For direct browser API access
 
 class NotificationServiceWeb {
   static NotificationServiceWeb? _instance;
@@ -20,17 +21,27 @@ class NotificationServiceWeb {
   bool _initialized = false;
   String? _fcmToken;
 
+  // ✨ NEW: Debug callback for UI
+  Function(String)? onDebugLog;
+
+  void _log(String message) {
+    print(message);
+    onDebugLog?.call(message);
+  }
+
   /// Initialize ONLY the listener (no auto-permission request)
   Future<void> initialize() async {
     if (_initialized) return;
 
     try {
-      print('🌐 Initializing Web Push Notifications (passive mode)...');
+      _log('🌐 Initializing Web Push Notifications (passive mode)...');
 
-      // ✨ NEW: Check if permission already granted, if yes get token
+      // ✨ ENHANCED: Check permission via both Firebase AND browser API
       final hasPermission = await this.hasPermission();
+      _log('📋 Initial permission check: $hasPermission');
+      
       if (hasPermission) {
-        print('🔔 Permission already granted, refreshing token...');
+        _log('🔔 Permission already granted, refreshing token...');
         await _obtainAndSaveToken();
       }
 
@@ -39,66 +50,135 @@ class NotificationServiceWeb {
 
       // Listen for token refresh (if user already granted permission)
       _firebaseMessaging.onTokenRefresh.listen((newToken) {
-        print('🔄 Web FCM Token refreshed');
+        _log('🔄 Web FCM Token refreshed');
         _fcmToken = newToken;
         _saveTokenToFirebase(newToken);
       });
 
       _initialized = true;
-      print('✅ Web Push Notifications initialized (listening mode)');
+      _log('✅ Web Push Notifications initialized (listening mode)');
 
     } catch (e) {
-      print('❌ Error initializing web notifications: $e');
+      _log('❌ Error initializing web notifications: $e');
+    }
+  }
+
+  /// ✨ ENHANCED: Check browser notification permission directly
+  Future<String> getBrowserPermissionStatus() async {
+    try {
+      // Check if Notification API is available
+      if (html.Notification.supported) {
+        final permission = html.Notification.permission;
+        _log('🌐 Browser Notification.permission: $permission');
+        return permission ?? 'unsupported'; // 'granted', 'denied', or 'default'
+      } else {
+        _log('❌ Browser Notification API not supported');
+        return 'unsupported';
+      }
+    } catch (e) {
+      _log('❌ Error checking browser permission: $e');
+      return 'error';
     }
   }
 
   /// Check if browser supports notifications
   Future<bool> isNotificationSupported() async {
     try {
-      final settings = await _firebaseMessaging.getNotificationSettings();
-      return settings.authorizationStatus != AuthorizationStatus.notDetermined ||
-             settings.authorizationStatus == AuthorizationStatus.authorized;
+      return html.Notification.supported;
     } catch (e) {
-      print('❌ Notification support check failed: $e');
+      _log('❌ Notification support check failed: $e');
       return false;
     }
   }
 
-  /// Get current permission status
+  /// ✨ ENHANCED: Get current permission status with dual check
   /// Returns: 'granted', 'denied', 'default', 'unsupported'
   Future<String> getPermissionStatus() async {
     try {
+      // 1️⃣ Check browser API first (more reliable for PWA)
+      final browserPermission = await getBrowserPermissionStatus();
+      _log('📱 Browser permission: $browserPermission');
+
+      // 2️⃣ Check Firebase settings
       final settings = await _firebaseMessaging.getNotificationSettings();
+      String firebasePermission;
       
       switch (settings.authorizationStatus) {
         case AuthorizationStatus.authorized:
-          return 'granted';
+          firebasePermission = 'granted';
+          break;
         case AuthorizationStatus.denied:
-          return 'denied';
+          firebasePermission = 'denied';
+          break;
         case AuthorizationStatus.notDetermined:
-          return 'default';
+          firebasePermission = 'default';
+          break;
         case AuthorizationStatus.provisional:
-          return 'provisional';
+          firebasePermission = 'provisional';
+          break;
         default:
-          return 'unsupported';
+          firebasePermission = 'unsupported';
       }
+      
+      _log('🔥 Firebase permission: $firebasePermission');
+
+      // ✨ CRITICAL: Trust browser API over Firebase for PWA
+      // Browser API is more reliable for installed PWAs
+      if (browserPermission == 'granted') {
+        _log('✅ Using browser permission (granted)');
+        return 'granted';
+      } else if (browserPermission == 'denied') {
+        _log('❌ Using browser permission (denied)');
+        return 'denied';
+      } else if (browserPermission == 'default') {
+        _log('⚠️ Using browser permission (default)');
+        return 'default';
+      }
+
+      // Fallback to Firebase if browser API fails
+      _log('⚠️ Falling back to Firebase permission');
+      return firebasePermission;
+
     } catch (e) {
-      print('❌ Error checking permission status: $e');
+      _log('❌ Error checking permission status: $e');
       return 'unsupported';
     }
   }
 
-  /// Check if permission is already granted
+  /// ✨ ENHANCED: Check if permission is already granted
   Future<bool> hasPermission() async {
-    final status = await getPermissionStatus();
-    return status == 'granted' || status == 'provisional';
+    try {
+      // Direct browser check (most reliable for PWA)
+      if (html.Notification.supported) {
+        final browserPerm = html.Notification.permission;
+        _log('🔍 Browser permission check: $browserPerm');
+        
+        if (browserPerm == 'granted') {
+          _log('✅ Browser reports: GRANTED');
+          return true;
+        } else if (browserPerm == 'denied') {
+          _log('❌ Browser reports: DENIED');
+          return false;
+        }
+      }
+
+      // Fallback to Firebase check
+      final status = await getPermissionStatus();
+      final hasIt = status == 'granted' || status == 'provisional';
+      _log('📋 Final hasPermission result: $hasIt');
+      return hasIt;
+    } catch (e) {
+      _log('❌ hasPermission error: $e');
+      return false;
+    }
   }
 
   /// Request notification permission from user
   /// This is the method called when user clicks the button
   Future<bool> requestPermission() async {
     try {
-      print('🔔 Requesting notification permission...');
+      _log('🔔 Requesting notification permission...');
+      _log('📱 Current browser permission: ${html.Notification.permission}');
 
       // Request permission
       final settings = await _firebaseMessaging.requestPermission(
@@ -108,41 +188,46 @@ class NotificationServiceWeb {
         provisional: false,
       );
 
-      print('📋 Permission status: ${settings.authorizationStatus}');
+      _log('📋 Permission status after request: ${settings.authorizationStatus}');
+      
+      // ✨ NEW: Check browser permission after request
+      final browserPermAfter = html.Notification.permission;
+      _log('🌐 Browser permission after request: $browserPermAfter');
 
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        print('✅ Notification permission granted');
+      if (settings.authorizationStatus == AuthorizationStatus.authorized ||
+          browserPermAfter == 'granted') {
+        _log('✅ Notification permission granted');
         
         // Get FCM token
         await _obtainAndSaveToken();
         
         if (_fcmToken != null) {
-          print('✅ Token obtained and saved successfully');
+          _log('✅ Token obtained and saved successfully');
           return true;
         } else {
-          print('❌ Permission granted but token is null');
+          _log('❌ Permission granted but token is null');
           return false;
         }
         
       } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
-        print('⚠️ Notification permission provisional');
+        _log('⚠️ Notification permission provisional');
         await _obtainAndSaveToken();
         
         if (_fcmToken != null) {
           return true;
         } else {
-          print('❌ Provisional permission but token is null');
+          _log('❌ Provisional permission but token is null');
           return false;
         }
         
       } else {
-        print('❌ Notification permission denied: ${settings.authorizationStatus}');
+        _log('❌ Notification permission denied: ${settings.authorizationStatus}');
         return false;
       }
 
     } catch (e, stackTrace) {
-      print('❌ Error requesting permission: $e');
-      print('Stack trace: $stackTrace');
+      _log('❌ Error requesting permission: $e');
+      _log('Stack trace: ${stackTrace.toString().substring(0, 200)}');
       return false;
     }
   }
@@ -150,7 +235,15 @@ class NotificationServiceWeb {
   /// Get FCM token and save to Firebase
   Future<void> _obtainAndSaveToken() async {
     try {
-      print('🔑 Obtaining FCM token...');
+      _log('🔑 Obtaining FCM token...');
+      
+      // ✨ ENHANCED: Check permission before getting token
+      final browserPerm = html.Notification.permission;
+      _log('📱 Browser permission before getToken: $browserPerm');
+      
+      if (browserPerm != 'granted') {
+        _log('⚠️ WARNING: Browser permission not granted, getToken may fail');
+      }
       
       // Get FCM token with VAPID key
       _fcmToken = await _firebaseMessaging.getToken(
@@ -158,33 +251,31 @@ class NotificationServiceWeb {
       );
 
       if (_fcmToken != null) {
-        print('📱 Web FCM Token obtained: $_fcmToken');
+        _log('📱 Web FCM Token obtained: ${_fcmToken!.substring(0, 30)}...');
         await _saveTokenToFirebase(_fcmToken!);
-        print('✅ Token saved to Firebase successfully');
+        _log('✅ Token saved to Firebase successfully');
       } else {
-        print('❌ Failed to get FCM token - token is null');
+        _log('❌ Failed to get FCM token - token is null');
+        _log('🔍 Browser permission: $browserPerm');
       }
     } catch (e, stackTrace) {
-      print('❌ Error obtaining FCM token: $e');
-      print('Stack trace: $stackTrace');
+      _log('❌ Error obtaining FCM token: $e');
+      _log('Stack trace: ${stackTrace.toString().substring(0, 300)}');
     }
   }
 
   /// Save FCM token to Firebase by nickname
-  /// Structure: /notification_tokens/{nickname}
-  /// Updates if exists, creates if new
   Future<void> _saveTokenToFirebase(String token) async {
     try {
       final nickname = await UserService.getNickname();
       
       if (nickname == null) {
-        print('⚠️ Cannot save FCM token: No nickname set');
+        _log('⚠️ Cannot save FCM token: No nickname set');
         return;
       }
 
       final lowercaseNickname = nickname.toLowerCase();
 
-      // Save to /notification_tokens/{nickname}
       await FirebaseService.instance.database
           .child('notification_tokens')
           .child(lowercaseNickname)
@@ -196,40 +287,35 @@ class NotificationServiceWeb {
         'lastUpdated': ServerValue.timestamp,
       });
 
-      print('💾 Web FCM token saved for: $lowercaseNickname');
-      print('   Path: /notification_tokens/$lowercaseNickname');
+      _log('💾 Web FCM token saved for: $lowercaseNickname');
+      _log('   Path: /notification_tokens/$lowercaseNickname');
     } catch (e) {
-      print('❌ Error saving FCM token: $e');
+      _log('❌ Error saving FCM token: $e');
     }
   }
 
-  /// Handle messages when app is in foreground
   void _handleForegroundMessage(RemoteMessage message) {
-    print('📩 Web foreground message received');
-    print('   Title: ${message.notification?.title}');
-    print('   Body: ${message.notification?.body}');
-    
-    // Browser will automatically show notification via service worker
+    _log('📩 Web foreground message received');
+    _log('   Title: ${message.notification?.title}');
+    _log('   Body: ${message.notification?.body}');
   }
 
-  /// Send notification to partner
   Future<bool> sendNotificationToPartner({
     required SignalType signalType,
     required String senderNickname,
   }) async {
     try {
-      print('📤 Sending web notification...');
+      _log('📤 Sending web notification...');
 
       final partnerNickname = await LoveSignalsService.instance.getPartnerNickname();
       if (partnerNickname == null) {
-        print('❌ No partner found');
+        _log('❌ No partner found');
         return false;
       }
 
       final isThinking = signalType == SignalType.thinkingOfYou;
       final signalTypeStr = isThinking ? 'thinkingOfYou' : 'virtualHug';
 
-      // Call Cloud Function
       final url = 'https://sendlovesignal-fpg5ddtutq-uc.a.run.app';
       
       final response = await http.post(
@@ -244,20 +330,19 @@ class NotificationServiceWeb {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('✅ Notification sent successfully: ${data['messageId']}');
+        _log('✅ Notification sent successfully: ${data['messageId']}');
         return true;
       } else {
-        print('❌ Failed to send notification: ${response.body}');
+        _log('❌ Failed to send notification: ${response.body}');
         return false;
       }
 
     } catch (e) {
-      print('❌ Error sending web notification: $e');
+      _log('❌ Error sending web notification: $e');
       return false;
     }
   }
 
-  /// Get partner's FCM token from Firebase
   Future<String?> _getPartnerFCMToken(String partnerNickname) async {
     try {
       final lowercaseNickname = partnerNickname.toLowerCase();
@@ -268,17 +353,17 @@ class NotificationServiceWeb {
           .once();
 
       if (snapshot.snapshot.value == null) {
-        print('❌ Partner token not found for: $lowercaseNickname');
+        _log('❌ Partner token not found for: $lowercaseNickname');
         return null;
       }
 
       final data = Map<String, dynamic>.from(snapshot.snapshot.value as Map);
       final token = data['token'] as String?;
       
-      print('✅ Found partner FCM token for: $lowercaseNickname');
+      _log('✅ Found partner FCM token for: $lowercaseNickname');
       return token;
     } catch (e) {
-      print('❌ Error getting partner FCM token: $e');
+      _log('❌ Error getting partner FCM token: $e');
       return null;
     }
   }
@@ -289,25 +374,81 @@ class NotificationServiceWeb {
     return await hasPermission();
   }
 
-  /// Force refresh token (for debug/switching devices)
+  /// ✨ ENHANCED: Force refresh token with detailed debugging
   Future<bool> forceRefreshToken() async {
     try {
-      print('🔄 Force refreshing token...');
+      _log('🔄 === FORCE REFRESH TOKEN START ===');
       
+      // 1️⃣ Check browser permission
+      final browserPerm = html.Notification.permission;
+      _log('1️⃣ Browser permission: $browserPerm');
+      
+      // 2️⃣ Check Firebase permission
+      final settings = await _firebaseMessaging.getNotificationSettings();
+      _log('2️⃣ Firebase authStatus: ${settings.authorizationStatus}');
+      
+      // 3️⃣ Check our hasPermission method
       final hasPermission = await this.hasPermission();
+      _log('3️⃣ hasPermission() result: $hasPermission');
+      
       if (!hasPermission) {
-        print('❌ No permission - cannot refresh');
+        _log('❌ No permission - cannot refresh');
+        _log('💡 TIP: User needs to grant permission first');
         return false;
       }
 
-      // Directly get and save token (don't call requestPermission)
+      // 4️⃣ Try to get token
+      _log('4️⃣ Attempting to get FCM token...');
       await _obtainAndSaveToken();
       
-      return _fcmToken != null;
+      // 5️⃣ Verify token was obtained
+      final success = _fcmToken != null;
+      _log('5️⃣ Token obtained: $success');
       
-    } catch (e) {
-      print('❌ Error force refreshing: $e');
+      if (success) {
+        _log('✅ Token: ${_fcmToken!.substring(0, 30)}...');
+      } else {
+        _log('❌ Token is still null');
+      }
+      
+      _log('🔄 === FORCE REFRESH TOKEN END ===');
+      return success;
+      
+    } catch (e, stackTrace) {
+      _log('❌ Error force refreshing: $e');
+      _log('Stack: ${stackTrace.toString().substring(0, 200)}');
       return false;
+    }
+  }
+
+  /// ✨ NEW: Comprehensive debug info
+  Future<Map<String, dynamic>> getDebugInfo() async {
+    try {
+      final browserPerm = html.Notification.permission;
+      final browserSupported = html.Notification.supported;
+      final settings = await _firebaseMessaging.getNotificationSettings();
+      final hasPermResult = await hasPermission();
+      
+      return {
+        'browser': {
+          'supported': browserSupported,
+          'permission': browserPerm,
+        },
+        'firebase': {
+          'authStatus': settings.authorizationStatus.toString(),
+          'alert': settings.alert.toString(),
+          'badge': settings.badge.toString(),
+          'sound': settings.sound.toString(),
+        },
+        'service': {
+          'initialized': _initialized,
+          'hasToken': _fcmToken != null,
+          'tokenPreview': _fcmToken?.substring(0, 20) ?? 'null',
+          'hasPermission': hasPermResult,
+        },
+      };
+    } catch (e) {
+      return {'error': e.toString()};
     }
   }
 }
