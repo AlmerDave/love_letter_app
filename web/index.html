@@ -77,20 +77,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js"></script>
 
-  <!-- ✨ Register Service Worker -->
-  <script>
-    // ✅ ADD THIS: Configure Firebase to use correct service worker path
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/love_letter_app/firebase-messaging-sw.js', {
-        scope: '/love_letter_app/'
-      }).then((registration) => {
-        console.log('✅ Service Worker registered with scope:', registration.scope);
-      }).catch((error) => {
-        console.error('❌ Service Worker registration failed:', error);
-      });
-    }
-  </script>
-
   <script>
     // The value below is injected by flutter build, do not touch.
     var serviceWorkerVersion = null;
@@ -101,6 +87,22 @@
   
   <script>
     window.addEventListener('load', function(ev) {
+      // ✅ Register Firebase Messaging Service Worker FIRST
+      if ('serviceWorker' in navigator) {
+        // Get the base path from the base href tag
+        const baseElement = document.querySelector('base');
+        const basePath = baseElement ? baseElement.getAttribute('href') : '/';
+        
+        // Register the Firebase Messaging service worker
+        navigator.serviceWorker.register(basePath + 'firebase-messaging-sw.js', {
+          scope: basePath
+        }).then((registration) => {
+          console.log('✅ Firebase Service Worker registered:', registration.scope);
+        }).catch((error) => {
+          console.error('❌ Firebase Service Worker registration failed:', error);
+        });
+      }
+
       // Download main.dart.js
       _flutter.loader.loadEntrypoint({
         serviceWorker: {
