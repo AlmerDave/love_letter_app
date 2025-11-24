@@ -79,16 +79,14 @@
 
   <!-- ✨ Register Service Worker -->
   <script>
+    // ✅ ADD THIS: Configure Firebase to use correct service worker path
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        // Register the service worker for push notifications
-        navigator.serviceWorker.register('./firebase-messaging-sw.js')
-          .then((registration) => {
-            console.log('✅ Service Worker registered:', registration);
-          })
-          .catch((error) => {
-            console.error('❌ Service Worker registration failed:', error);
-          });
+      navigator.serviceWorker.register('/love_letter_app/firebase-messaging-sw.js', {
+        scope: '/love_letter_app/'
+      }).then((registration) => {
+        console.log('✅ Service Worker registered with scope:', registration.scope);
+      }).catch((error) => {
+        console.error('❌ Service Worker registration failed:', error);
       });
     }
   </script>
