@@ -71,7 +71,7 @@ exports.sendLoveSignal = onRequest(async (request, response) => {
     const title = "Love Letters 💕";
     const body = isThinking ?
       `${senderNickname} is thinking of you right now 💭✨` :
-      `${senderNickname} sent you a warm hug! 🤗💕`;
+      `${senderNickname} sent you a warm hug & kisses! 🤗💕`;
 
     const message = {
       notification: {

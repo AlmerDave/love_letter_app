@@ -308,22 +308,25 @@ class NotificationServiceWeb {
     _log('   Title: ${message.notification?.title}');
     _log('   Body: ${message.notification?.body}');
     
-    // ✅ SHOW NOTIFICATION in foreground
+    // ✅ SHOW NOTIFICATION using Service Worker
     try {
       if (html.Notification.supported && html.Notification.permission == 'granted') {
-        final notification = html.Notification(
-          message.notification?.title ?? 'Love Signal',
-          body: message.notification?.body ?? 'You received a love signal!',
-          icon: '/icons/Icon-192.png',
-          tag: 'love-signal-${DateTime.now().millisecondsSinceEpoch}',
-        );
-        
-        _log('✅ Notification displayed');
-        
-        // Optional: Handle click
-        notification.onClick.listen((event) {
-          _log('🖱️ Notification clicked');
-          notification.close();
+        // Use service worker registration to show notification
+        html.window.navigator.serviceWorker?.ready.then((registration) {
+          registration.showNotification(
+            message.notification?.title ?? 'Love Signal',
+            {
+              'body': message.notification?.body ?? 'You received a love signal!',
+              'icon': '/icons/Icon-192.png',
+              'badge': '/icons/Icon-192.png',
+              'tag': 'love-signal-${DateTime.now().millisecondsSinceEpoch}',
+              'vibrate': [200, 100, 200],
+              'requireInteraction': true,
+            },
+          );
+          _log('✅ Notification displayed via Service Worker');
+        }).catchError((error) {
+          _log('❌ Error showing notification: $error');
         });
       } else {
         _log('⚠️ Cannot show notification - permission: ${html.Notification.permission}');

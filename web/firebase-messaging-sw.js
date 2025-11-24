@@ -17,27 +17,27 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Handle background messages (when app is closed/minimized)
-messaging.onBackgroundMessage((payload) => {
-  console.log('🔔 Background message received:', payload);
+// // Handle background messages (when app is closed/minimized)
+// messaging.onBackgroundMessage((payload) => {
+//   console.log('🔔 Background message received:', payload);
   
-  const notificationTitle = payload.notification?.title || 'Love Letters 💕';
-  const notificationOptions = {
-    body: payload.notification?.body || 'You have a new love signal!',
-    icon: '/icons/Icon-192.png',
-    badge: '/icons/Icon-192.png',
-    tag: 'love-signal',
-    requireInteraction: false,
-    vibrate: [200, 100, 200], // Vibration pattern
-    data: {
-      url: '/', // URL to open when clicked
-      signalType: payload.data?.type || 'unknown',
-    },
-  };
+//   const notificationTitle = payload.notification?.title || 'Love Letters 💕';
+//   const notificationOptions = {
+//     body: payload.notification?.body || 'You have a new love signal!',
+//     icon: '/icons/Icon-192.png',
+//     badge: '/icons/Icon-192.png',
+//     tag: 'love-signal',
+//     requireInteraction: false,
+//     vibrate: [200, 100, 200], // Vibration pattern
+//     data: {
+//       url: '/', // URL to open when clicked
+//       signalType: payload.data?.type || 'unknown',
+//     },
+//   };
 
-  // Show the notification
-  return self.registration.showNotification(notificationTitle, notificationOptions);
-});
+//   // Show the notification
+//   return self.registration.showNotification(notificationTitle, notificationOptions);
+// });
 
 // Handle notification clicks
 self.addEventListener('notificationclick', (event) => {
