@@ -136,3 +136,5 @@ coverage/
 *.tmp
 *.temp
 *.bat
+
+*.firebase

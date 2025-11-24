@@ -6,7 +6,7 @@ import 'package:love_letter_app/services/user_service.dart';
 import 'package:love_letter_app/services/love_signals_service.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:html' as html; // ✨ NEW: For direct browser API access
+import 'dart:html' as html;
 
 class NotificationServiceWeb {
   static NotificationServiceWeb? _instance;
@@ -307,6 +307,30 @@ class NotificationServiceWeb {
     _log('📩 Web foreground message received');
     _log('   Title: ${message.notification?.title}');
     _log('   Body: ${message.notification?.body}');
+    
+    // ✅ SHOW NOTIFICATION in foreground
+    try {
+      if (html.Notification.supported && html.Notification.permission == 'granted') {
+        final notification = html.Notification(
+          message.notification?.title ?? 'Love Signal',
+          body: message.notification?.body ?? 'You received a love signal!',
+          icon: '/icons/Icon-192.png',
+          tag: 'love-signal-${DateTime.now().millisecondsSinceEpoch}',
+        );
+        
+        _log('✅ Notification displayed');
+        
+        // Optional: Handle click
+        notification.onClick.listen((event) {
+          _log('🖱️ Notification clicked');
+          notification.close();
+        });
+      } else {
+        _log('⚠️ Cannot show notification - permission: ${html.Notification.permission}');
+      }
+    } catch (e) {
+      _log('❌ Error showing notification: $e');
+    }
   }
 
   Future<bool> sendNotificationToPartner({
