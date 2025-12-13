@@ -126,6 +126,76 @@ class LoveSignalsService {
     }
   }
 
+  /// Get signal counts for a specific date (today's signals)
+  Future<Map<String, int>> getDailySignalCounts([DateTime? date]) async {
+    final targetDate = date ?? DateTime.now();
+    final myNickname = await UserService.getNickname();
+    
+    if (myNickname == null) {
+      return {
+        'thinkingSent': 0,
+        'thinkingReceived': 0,
+        'hugSent': 0,
+        'hugReceived': 0,
+      };
+    }
+
+    final lowercaseNickname = myNickname.toLowerCase();
+    
+    // Get start and end of the target date
+    final startOfDay = DateTime(targetDate.year, targetDate.month, targetDate.day);
+    final endOfDay = DateTime(targetDate.year, targetDate.month, targetDate.day, 23, 59, 59);
+    
+    final snapshot = await _signalsRef.once();
+    if (snapshot.snapshot.value == null) {
+      return {
+        'thinkingSent': 0,
+        'thinkingReceived': 0,
+        'hugSent': 0,
+        'hugReceived': 0,
+      };
+    }
+
+    final data = Map<String, dynamic>.from(snapshot.snapshot.value as Map);
+    
+    int thinkingSent = 0;
+    int thinkingReceived = 0;
+    int hugSent = 0;
+    int hugReceived = 0;
+
+    data.forEach((id, signalData) {
+      final signal = LoveSignal.fromMap(id, Map<String, dynamic>.from(signalData));
+      
+      // Check if signal is within today's date range
+      if (signal.timestamp.isAfter(startOfDay.subtract(Duration(seconds: 1))) && 
+          signal.timestamp.isBefore(endOfDay.add(Duration(seconds: 1)))) {
+        
+        if (signal.senderNickname == lowercaseNickname) {
+          // Sent by me today
+          if (signal.type == SignalType.thinkingOfYou) {
+            thinkingSent++;
+          } else {
+            hugSent++;
+          }
+        } else if (signal.receiverNickname == lowercaseNickname) {
+          // Received by me today
+          if (signal.type == SignalType.thinkingOfYou) {
+            thinkingReceived++;
+          } else {
+            hugReceived++;
+          }
+        }
+      }
+    });
+
+    return {
+      'thinkingSent': thinkingSent,
+      'thinkingReceived': thinkingReceived,
+      'hugSent': hugSent,
+      'hugReceived': hugReceived,
+    };
+  }
+
   /// Check if user can send a signal (cooldown check)
   Future<bool> canSendSignal(SignalType type) async {
     final lastSentTime = await getLastSentTime(type);

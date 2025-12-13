@@ -10,6 +10,13 @@ import 'package:love_letter_app/services/sound_service.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
+extension StringCapitalization on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return this[0].toUpperCase() + substring(1);
+  }
+}
+
 class LoveSignalsScreen extends StatefulWidget {
   const LoveSignalsScreen({Key? key}) : super(key: key);
 
@@ -19,6 +26,12 @@ class LoveSignalsScreen extends StatefulWidget {
 
 class _LoveSignalsScreenState extends State<LoveSignalsScreen>
     with TickerProviderStateMixin {
+
+  // Daily signal counts
+  int _dailyThinkingSent = 0;
+  int _dailyThinkingReceived = 0;
+  int _dailyHugSent = 0;
+  int _dailyHugReceived = 0;
   
   // Signal counts
   int _thinkingSent = 0;
@@ -200,8 +213,11 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
   }
 
   Future<void> _loadData() async {
-    // Load counts
+    // Load all-time counts
     final counts = await LoveSignalsService.instance.getSignalCounts();
+    
+    // Load daily counts (NEW)
+    final dailyCounts = await LoveSignalsService.instance.getDailySignalCounts();
     
     // Load cooldowns
     final thinkingCooldown = await LoveSignalsService.instance
@@ -211,10 +227,18 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
 
     if (mounted) {
       setState(() {
+        // All-time counts
         _thinkingSent = counts['thinkingSent'] ?? 0;
         _thinkingReceived = counts['thinkingReceived'] ?? 0;
         _hugSent = counts['hugSent'] ?? 0;
         _hugReceived = counts['hugReceived'] ?? 0;
+        
+        // Daily counts (NEW)
+        _dailyThinkingSent = dailyCounts['thinkingSent'] ?? 0;
+        _dailyThinkingReceived = dailyCounts['thinkingReceived'] ?? 0;
+        _dailyHugSent = dailyCounts['hugSent'] ?? 0;
+        _dailyHugReceived = dailyCounts['hugReceived'] ?? 0;
+        
         _thinkingCooldown = thinkingCooldown;
         _hugCooldown = hugCooldown;
       });
@@ -411,8 +435,8 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
               child: Column(
                 children: [
                   // ✨ Debug Console (only on web)
-                  if (kIsWeb)
-                    _buildDebugConsole(),
+                  // if (kIsWeb)
+                  //   _buildDebugConsole(),
                   
                   // ✨ NEW: Notification permission banner
                   if (kIsWeb && _showNotificationBanner)
@@ -428,7 +452,7 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
                       child: ElevatedButton.icon(
                         onPressed: _forceTokenRefresh,
                         icon: const Icon(Icons.refresh),
-                        label: const Text('🔄 Force Refresh Token (Debug)'),
+                        label: const Text('🔄 Refresh Token'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.deepPurple,
                           foregroundColor: Colors.white,
@@ -440,8 +464,9 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
                       ),
                     ),
 
-                  // Dashboard counters
-                  _buildDashboard(),
+                  // Daily Dashboard at the top
+                  _buildDailyDashboard(),
+                    
                   const SizedBox(height: 24),
 
                   // Send buttons
@@ -476,6 +501,11 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
                     ),
                   ),
                   const SizedBox(height: 32),
+
+                  // All-time Statistics (moved from _buildDashboard)
+                  _buildAllTimeStatistics(),
+
+                  const SizedBox(height: 24),
 
                   // Recent signals
                   _buildRecentSignals(),
@@ -536,6 +566,229 @@ class _LoveSignalsScreenState extends State<LoveSignalsScreen>
         }).toList(),
       ],
     );
+  }
+
+  Widget _buildDailyDashboard() {
+    final today = DateTime.now();
+    final formattedDate = '${_getMonthName(today.month)} ${today.day}, ${today.year}';
+    
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.primaryLavender.withOpacity(0.3),
+            AppTheme.softBlush.withOpacity(0.2),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppTheme.primaryLavender.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          // Date header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.calendar_today,
+                color: AppTheme.deepPurple,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'TODAY - $formattedDate',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.deepPurple,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Daily signal counts
+          Row(
+            children: [
+              Expanded(
+                child: _buildDailySignalCard(
+                  emoji: '💭',
+                  title: 'Thinking of You',
+                  yourCount: _dailyThinkingSent,
+                  partnerCount: _dailyThinkingReceived,
+                  color: AppTheme.deepPurple,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildDailySignalCard(
+                  emoji: '💕',
+                  title: 'Virtual Hugs & Kisses',
+                  yourCount: _dailyHugSent,
+                  partnerCount: _dailyHugReceived,
+                  color: AppTheme.blushPink,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDailySignalCard({
+    required String emoji,
+    required String title,
+    required int yourCount,
+    required int partnerCount,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: color.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            emoji,
+            style: const TextStyle(fontSize: 24),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.darkText,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Column(
+                children: [
+                  Text(
+                    '$yourCount',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                  FutureBuilder<String?>(
+                    future: UserService.getNickname(),
+                    builder: (context, snapshot) {
+                      return Text(
+                        snapshot.data?.toLowerCase().capitalize() ?? 'You',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppTheme.lightText,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              Container(
+                width: 1,
+                height: 30,
+                color: Colors.grey.shade300,
+              ),
+              Column(
+                children: [
+                  Text(
+                    '$partnerCount',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                  FutureBuilder<String?>(
+                    future: LoveSignalsService.instance.getPartnerNickname(),
+                    builder: (context, snapshot) {
+                      return Text(
+                        snapshot.data?.toLowerCase().capitalize() ?? 'Partner',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: AppTheme.lightText,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAllTimeStatistics() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.grey.shade200,
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.bar_chart,
+                color: AppTheme.lightText,
+                size: 18,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'ALL-TIME BB LOVENESS',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.lightText,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
+          _buildDashboard(),
+        ],
+      ),
+    );
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[month - 1];
   }
 
   // ✨ ENHANCED: Better debug console with more features
