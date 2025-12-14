@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:love_letter_app/utils/theme.dart';
 import 'package:love_letter_app/screens/location_map_screen.dart';
 import 'package:love_letter_app/screens/love_signals_screen.dart';
+import 'package:love_letter_app/screens/gift_room_screen.dart';
 import 'package:love_letter_app/services/location_service.dart';
 import 'package:love_letter_app/services/firebase_service.dart';
 import 'package:love_letter_app/services/user_service.dart';
@@ -70,22 +71,22 @@ class MoreScreen extends StatelessWidget {
                 isComingSoon: false, // Active feature!
               ),
 
-              // Placeholder 2 - Special Dates (GRAYED OUT)
+              // 🎁 Gift Room Feature Card (ACTIVE) - Romantic Surprise!
               _FeatureCard(
-                imagePath: 'assets/images/bubu_dudu/calendar_feature.gif',
-                fallbackIcon: Icons.calendar_today,
-                title: 'Please\nWait',
-                subtitle: 'Coming soon 📅',
+                imagePath: 'assets/images/gift_room/gift_room_feature.gif',
+                fallbackIcon: Icons.card_giftcard,
+                title: "Jovi's Room",
+                subtitle: 'A surprise awaits 🎁',
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    Colors.grey.shade300, // ✨ Grayed out
-                    Colors.grey.shade400,
+                    Color(0xFFFFB6C1), // Light pink
+                    Color(0xFFDDA0DD), // Plum
                   ],
                 ),
-                onTap: () => _showComingSoon(context),
-                isComingSoon: true,
+                onTap: () => _handleGiftRoom(context),
+                isComingSoon: false, // Active feature!
               ),
 
               // Placeholder 3 - Voice Messages (GRAYED OUT)
@@ -117,6 +118,16 @@ class MoreScreen extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (context) => const LoveSignalsScreen(),
+      ),
+    );
+  }
+
+  // 🎁 NEW: Gift Room handler - Navigate to romantic surprise game!
+  void _handleGiftRoom(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const GiftRoomScreen(),
       ),
     );
   }

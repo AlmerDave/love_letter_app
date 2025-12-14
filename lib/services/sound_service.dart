@@ -16,6 +16,10 @@ enum SoundType {
   journeyFootsteps,     // While Bubu runs LEFT
   journeyReunion,       // When reunited 💕
   journeyWhoosh,        // When Bubu disappears/enters
+  
+  // ==================== GIFT ROOM SOUNDS ====================
+  giftRoomBackground,   // Background music for gift room
+  proximityChime,       // When near gift giver
 }
 
 /// A singleton service to manage and play sound effects.
@@ -49,6 +53,15 @@ class SoundService {
       case SoundType.tap:
         soundPath = 'sounds/tap.mp3';
         break;
+      
+      // Gift Room Sounds
+      case SoundType.giftRoomBackground:
+        soundPath = 'sounds/gift_room_background.mp3';
+        break;
+      case SoundType.proximityChime:
+        soundPath = 'sounds/proximity_chime.mp3';
+        break;
+        
       default:
         print("Warning: ${type.name} should use playJourneySound() instead");
         return;
